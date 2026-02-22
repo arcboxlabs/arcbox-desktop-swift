@@ -50,8 +50,12 @@ struct VolumesListView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 SortMenuButton()
-                IconButton(symbol: "magnifyingglass") {}
-                IconButton(symbol: "plus") {}
+                Button(action: {}) {
+                    Image(systemName: "magnifyingglass")
+                }
+                Button(action: {}) {
+                    Image(systemName: "plus")
+                }
             }
         }
         .onAppear { vm.loadSampleData() }

@@ -46,7 +46,9 @@ struct ServicesListView: View {
         .navigationSubtitle(vm.kubernetesEnabled ? "\(vm.serviceCount) total" : "Disabled")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                IconButton(symbol: "magnifyingglass") {}
+                Button(action: {}) {
+                    Image(systemName: "magnifyingglass")
+                }
             }
         }
         .onAppear { vm.loadSampleData() }

@@ -65,9 +65,11 @@ struct ContainersListView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 SortMenuButton()
-                IconButton(symbol: "magnifyingglass") {}
-                IconButton(symbol: "plus") {
-                    vm.showNewContainerSheet = true
+                Button(action: {}) {
+                    Image(systemName: "magnifyingglass")
+                }
+                Button(action: { vm.showNewContainerSheet = true }) {
+                    Image(systemName: "plus")
                 }
             }
         }
