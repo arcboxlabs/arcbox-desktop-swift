@@ -240,4 +240,12 @@ enum SampleData {
             createdAt: Date().addingTimeInterval(-86400 * 7)
         ),
     ]
+
+    // MARK: - Pods
+
+    static let pods: [PodViewModel] = []
+
+    // MARK: - Services
+
+    static let services: [ServiceViewModel] = []
 }

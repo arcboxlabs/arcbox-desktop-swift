@@ -6,6 +6,8 @@ enum NavItem: String, CaseIterable, Identifiable {
     case volumes
     case images
     case networks
+    case pods
+    case services
     case machines
 
     var id: String { rawValue }
@@ -16,6 +18,8 @@ enum NavItem: String, CaseIterable, Identifiable {
         case .volumes: "Volumes"
         case .images: "Images"
         case .networks: "Networks"
+        case .pods: "Pods"
+        case .services: "Services"
         case .machines: "Machines"
         }
     }
@@ -26,6 +30,8 @@ enum NavItem: String, CaseIterable, Identifiable {
         case .volumes: "internaldrive"
         case .images: "circle.dotted.circle"
         case .networks: "network"
+        case .pods: "cube"
+        case .services: "globe"
         case .machines: "desktopcomputer"
         }
     }
@@ -33,6 +39,7 @@ enum NavItem: String, CaseIterable, Identifiable {
     /// Sidebar sections
     enum Section: String, CaseIterable, Identifiable {
         case docker = "DOCKER"
+        case kubernetes = "KUBERNETES"
         case linux = "LINUX"
 
         var id: String { rawValue }
@@ -40,6 +47,7 @@ enum NavItem: String, CaseIterable, Identifiable {
         var items: [NavItem] {
             switch self {
             case .docker: [.containers, .volumes, .images, .networks]
+            case .kubernetes: [.pods, .services]
             case .linux: [.machines]
             }
         }
