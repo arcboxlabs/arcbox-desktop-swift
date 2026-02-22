@@ -1,0 +1,16 @@
+# Xcode user-specific
+xcuserdata/
+*.xcuserdatad/
+
+# Xcode shared schemes (regenerated per-user)
+*.xcodeproj/xcshareddata/
+
+# Xcode workspace user settings
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
