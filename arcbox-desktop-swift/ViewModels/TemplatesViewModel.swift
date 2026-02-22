@@ -8,6 +8,12 @@ enum TemplateDetailTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Sort field for templates
+enum TemplateSortField: String, CaseIterable {
+    case name = "Name"
+    case dateCreated = "Date Created"
+}
+
 /// Template list state
 @Observable
 class TemplatesViewModel {
@@ -15,8 +21,23 @@ class TemplatesViewModel {
     var selectedID: String? = nil
     var activeTab: TemplateDetailTab = .info
     var listWidth: CGFloat = 320
+    var sortBy: TemplateSortField = .name
+    var sortAscending: Bool = true
 
     var templateCount: Int { templates.count }
+
+    var sortedTemplates: [TemplateViewModel] {
+        templates.sorted { a, b in
+            let result: Bool
+            switch sortBy {
+            case .name:
+                result = a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            case .dateCreated:
+                result = a.createdAt < b.createdAt
+            }
+            return sortAscending ? result : !result
+        }
+    }
 
     var selectedTemplate: TemplateViewModel? {
         guard let id = selectedID else { return nil }

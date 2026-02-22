@@ -8,6 +8,12 @@ enum NetworkDetailTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Sort field for networks
+enum NetworkSortField: String, CaseIterable {
+    case name = "Name"
+    case dateCreated = "Date Created"
+}
+
 /// Network list state
 @Observable
 class NetworksViewModel {
@@ -16,8 +22,23 @@ class NetworksViewModel {
     var activeTab: NetworkDetailTab = .info
     var listWidth: CGFloat = 320
     var showNewNetworkSheet: Bool = false
+    var sortBy: NetworkSortField = .name
+    var sortAscending: Bool = true
 
     var networkCount: Int { networks.count }
+
+    var sortedNetworks: [NetworkViewModel] {
+        networks.sorted { a, b in
+            let result: Bool
+            switch sortBy {
+            case .name:
+                result = a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            case .dateCreated:
+                result = a.createdAt < b.createdAt
+            }
+            return sortAscending ? result : !result
+        }
+    }
 
     var selectedNetwork: NetworkViewModel? {
         guard let id = selectedID else { return nil }

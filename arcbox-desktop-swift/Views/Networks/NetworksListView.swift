@@ -14,7 +14,7 @@ struct NetworksListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(vm.networks) { network in
+                            ForEach(vm.sortedNetworks) { network in
                                 NetworkRowView(
                                     network: network,
                                     isSelected: vm.selectedID == network.id,
@@ -39,7 +39,7 @@ struct NetworksListView: View {
         .navigationSubtitle("\(vm.networkCount) total")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                SortMenuButton()
+                SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }

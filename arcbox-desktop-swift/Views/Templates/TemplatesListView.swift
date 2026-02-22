@@ -13,7 +13,7 @@ struct TemplatesListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(vm.templates) { template in
+                            ForEach(vm.sortedTemplates) { template in
                                 TemplateRowView(
                                     template: template,
                                     isSelected: vm.selectedID == template.id,
@@ -38,7 +38,7 @@ struct TemplatesListView: View {
         .navigationSubtitle("\(vm.templateCount) total")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                SortMenuButton()
+                SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }

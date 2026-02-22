@@ -8,6 +8,13 @@ enum VolumeDetailTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Sort field for volumes
+enum VolumeSortField: String, CaseIterable {
+    case name = "Name"
+    case dateCreated = "Date Created"
+    case size = "Size"
+}
+
 /// Volume list state
 @Observable
 class VolumesViewModel {
@@ -16,6 +23,8 @@ class VolumesViewModel {
     var activeTab: VolumeDetailTab = .info
     var listWidth: CGFloat = 320
     var showNewVolumeSheet: Bool = false
+    var sortBy: VolumeSortField = .name
+    var sortAscending: Bool = true
 
     var totalSize: String {
         let bytes: UInt64 = volumes.compactMap(\.sizeBytes).reduce(0, +)
@@ -25,6 +34,21 @@ class VolumesViewModel {
         }
         let mb = Double(bytes) / 1_000_000.0
         return String(format: "%.0f MB total", mb)
+    }
+
+    var sortedVolumes: [VolumeViewModel] {
+        volumes.sorted { a, b in
+            let result: Bool
+            switch sortBy {
+            case .name:
+                result = a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            case .dateCreated:
+                result = a.createdAt < b.createdAt
+            case .size:
+                result = (a.sizeBytes ?? 0) < (b.sizeBytes ?? 0)
+            }
+            return sortAscending ? result : !result
+        }
     }
 
     var selectedVolume: VolumeViewModel? {

@@ -10,6 +10,13 @@ enum ContainerDetailTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Sort field for containers
+enum ContainerSortField: String, CaseIterable {
+    case name = "Name"
+    case dateCreated = "Date Created"
+    case status = "Status"
+}
+
 /// Container list state, selection, tabs, grouping
 @Observable
 class ContainersViewModel {
@@ -20,6 +27,8 @@ class ContainersViewModel {
     var listWidth: CGFloat = 320
     var searchText: String = ""
     var showNewContainerSheet: Bool = false
+    var sortBy: ContainerSortField = .name
+    var sortAscending: Bool = true
 
     var runningCount: Int {
         containers.filter(\.isRunning).count
@@ -30,6 +39,21 @@ class ContainersViewModel {
         return containers.first { $0.id == id }
     }
 
+    private func sortedContainers(_ list: [ContainerViewModel]) -> [ContainerViewModel] {
+        list.sorted { a, b in
+            let result: Bool
+            switch sortBy {
+            case .name:
+                result = a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            case .dateCreated:
+                result = a.createdAt < b.createdAt
+            case .status:
+                result = a.state.rawValue < b.state.rawValue
+            }
+            return sortAscending ? result : !result
+        }
+    }
+
     /// Group containers by compose project
     var composeGroups: [(project: String, containers: [ContainerViewModel])] {
         var groups: [String: [ContainerViewModel]] = [:]
@@ -38,12 +62,14 @@ class ContainersViewModel {
                 groups[project, default: []].append(container)
             }
         }
-        return groups.sorted { $0.key < $1.key }.map { (project: $0.key, containers: $0.value) }
+        return groups.sorted { $0.key < $1.key }.map {
+            (project: $0.key, containers: sortedContainers($0.value))
+        }
     }
 
     /// Containers without a compose project
     var standaloneContainers: [ContainerViewModel] {
-        containers.filter { $0.composeProject == nil }
+        sortedContainers(containers.filter { $0.composeProject == nil })
     }
 
     func selectContainer(_ id: String) {

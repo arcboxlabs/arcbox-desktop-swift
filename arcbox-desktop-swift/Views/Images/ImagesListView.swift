@@ -24,7 +24,7 @@ struct ImagesListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(vm.images) { image in
+                            ForEach(vm.sortedImages) { image in
                                 ImageRowView(
                                     image: image,
                                     isSelected: vm.selectedID == image.id,
@@ -49,7 +49,7 @@ struct ImagesListView: View {
         .navigationSubtitle(vm.totalSize)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                SortMenuButton()
+                SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }

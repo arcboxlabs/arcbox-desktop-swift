@@ -64,7 +64,7 @@ struct ContainersListView: View {
         .navigationSubtitle("\(vm.runningCount) running")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                SortMenuButton()
+                SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }

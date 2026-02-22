@@ -48,7 +48,7 @@ struct SandboxesListView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if vm.pageTab == .list {
-                    SortMenuButton()
+                    SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                     Button(action: {}) {
                         Image(systemName: "magnifyingglass")
                     }
@@ -70,7 +70,7 @@ struct SandboxesListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(vm.sandboxes) { sandbox in
+                            ForEach(vm.sortedSandboxes) { sandbox in
                                 SandboxRowView(
                                     sandbox: sandbox,
                                     isSelected: vm.selectedID == sandbox.id,

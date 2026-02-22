@@ -24,7 +24,7 @@ struct VolumesListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(vm.volumes) { volume in
+                            ForEach(vm.sortedVolumes) { volume in
                                 VolumeRowView(
                                     volume: volume,
                                     isSelected: vm.selectedID == volume.id,
@@ -49,7 +49,7 @@ struct VolumesListView: View {
         .navigationSubtitle(vm.totalSize)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                SortMenuButton()
+                SortMenuButton(sortBy: $vm.sortBy, ascending: $vm.sortAscending)
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }
