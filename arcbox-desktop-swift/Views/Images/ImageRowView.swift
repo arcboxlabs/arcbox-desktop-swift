@@ -74,14 +74,18 @@ struct ImageRowView: View {
                 )
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 8)
         .frame(height: 44)
         .background(
-            isSelected
-                ? AppColors.selection
-                : (isHovered ? AppColors.hover : Color.clear)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    isSelected
+                        ? AppColors.selection
+                        : (isHovered ? AppColors.hover : Color.clear)
+                )
         )
         .foregroundStyle(isSelected ? AppColors.onAccent : AppColors.text)
+        .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .onHover { hovering in isHovered = hovering }

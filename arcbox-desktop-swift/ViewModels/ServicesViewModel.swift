@@ -13,7 +13,7 @@ class ServicesViewModel {
     var services: [ServiceViewModel] = []
     var selectedID: String? = nil
     var activeTab: ServiceDetailTab = .info
-    var listWidth: CGFloat = 380
+    var listWidth: CGFloat = 320
     var kubernetesEnabled: Bool = false
 
     var serviceCount: Int { services.count }

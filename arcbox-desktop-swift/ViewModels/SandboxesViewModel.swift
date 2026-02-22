@@ -23,7 +23,7 @@ class SandboxesViewModel {
     var selectedID: String? = nil
     var activeTab: SandboxDetailTab = .info
     var pageTab: SandboxPageTab = .monitoring
-    var listWidth: CGFloat = 380
+    var listWidth: CGFloat = 320
 
     // Monitoring metrics
     var concurrentSandboxes: Int = 0

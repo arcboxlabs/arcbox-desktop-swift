@@ -14,7 +14,7 @@ class NetworksViewModel {
     var networks: [NetworkViewModel] = []
     var selectedID: String? = nil
     var activeTab: NetworkDetailTab = .info
-    var listWidth: CGFloat = 380
+    var listWidth: CGFloat = 320
 
     var networkCount: Int { networks.count }
 

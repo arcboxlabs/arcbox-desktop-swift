@@ -14,7 +14,7 @@ class TemplatesViewModel {
     var templates: [TemplateViewModel] = []
     var selectedID: String? = nil
     var activeTab: TemplateDetailTab = .info
-    var listWidth: CGFloat = 380
+    var listWidth: CGFloat = 320
 
     var templateCount: Int { templates.count }
 

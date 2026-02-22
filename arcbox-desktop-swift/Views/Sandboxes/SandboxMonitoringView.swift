@@ -33,7 +33,7 @@ struct MetricCard: View {
                     .foregroundStyle(AppColors.textMuted)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)

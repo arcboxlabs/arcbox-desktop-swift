@@ -17,7 +17,7 @@ class ContainersViewModel {
     var selectedID: String? = nil
     var activeTab: ContainerDetailTab = .info
     var expandedGroups: Set<String> = []
-    var listWidth: CGFloat = 340
+    var listWidth: CGFloat = 320
     var searchText: String = ""
     var showNewContainerSheet: Bool = false
 

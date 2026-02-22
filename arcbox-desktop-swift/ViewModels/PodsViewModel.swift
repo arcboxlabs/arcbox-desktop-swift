@@ -15,7 +15,7 @@ class PodsViewModel {
     var pods: [PodViewModel] = []
     var selectedID: String? = nil
     var activeTab: PodDetailTab = .info
-    var listWidth: CGFloat = 380
+    var listWidth: CGFloat = 320
     var kubernetesEnabled: Bool = false
 
     var podCount: Int { pods.count }
