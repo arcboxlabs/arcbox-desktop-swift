@@ -39,7 +39,6 @@ struct MachinesView: View {
                         .font(.system(size: 13))
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
             }
         }
         .onAppear { vm.loadSampleData() }
