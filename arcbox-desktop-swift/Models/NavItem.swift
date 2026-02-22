@@ -9,6 +9,8 @@ enum NavItem: String, CaseIterable, Identifiable {
     case pods
     case services
     case machines
+    case sandboxes
+    case templates
 
     var id: String { rawValue }
 
@@ -21,6 +23,8 @@ enum NavItem: String, CaseIterable, Identifiable {
         case .pods: "Pods"
         case .services: "Services"
         case .machines: "Machines"
+        case .sandboxes: "Sandboxes"
+        case .templates: "Templates"
         }
     }
 
@@ -33,6 +37,8 @@ enum NavItem: String, CaseIterable, Identifiable {
         case .pods: "cube"
         case .services: "globe"
         case .machines: "desktopcomputer"
+        case .sandboxes: "square.stack.3d.up"
+        case .templates: "doc.on.doc"
         }
     }
 
@@ -41,6 +47,7 @@ enum NavItem: String, CaseIterable, Identifiable {
         case docker = "DOCKER"
         case kubernetes = "KUBERNETES"
         case linux = "LINUX"
+        case sandbox = "SANDBOX"
 
         var id: String { rawValue }
 
@@ -49,6 +56,7 @@ enum NavItem: String, CaseIterable, Identifiable {
             case .docker: [.containers, .volumes, .images, .networks]
             case .kubernetes: [.pods, .services]
             case .linux: [.machines]
+            case .sandbox: [.sandboxes, .templates]
             }
         }
     }

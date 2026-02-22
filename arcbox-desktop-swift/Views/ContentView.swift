@@ -26,6 +26,12 @@ struct ContentView: View {
                             .tag(item)
                     }
                 }
+                Section("Sandbox") {
+                    ForEach(NavItem.Section.sandbox.items) { item in
+                        Label(item.label, systemImage: item.sfSymbol)
+                            .tag(item)
+                    }
+                }
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 150, ideal: 180, max: 220)
@@ -45,6 +51,10 @@ struct ContentView: View {
                 ServicesListView()
             case .machines:
                 MachinesView()
+            case .sandboxes:
+                SandboxesListView()
+            case .templates:
+                TemplatesListView()
             case nil:
                 ContainersListView()
             }
