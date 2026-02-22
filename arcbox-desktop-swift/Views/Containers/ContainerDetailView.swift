@@ -7,9 +7,8 @@ struct ContainerDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Segmented tab bar (52pt height, centered)
+            // Detail toolbar
             HStack {
-                Spacer()
                 Picker("Tab", selection: $activeTab) {
                     ForEach(ContainerDetailTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -18,14 +17,11 @@ struct ContainerDetailView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 300)
-                Spacer()
             }
-            .frame(height: 52)
-            .overlay(alignment: .bottom) {
-                Divider()
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
 
-            // Tab content
             if let container {
                 switch activeTab {
                 case .info:

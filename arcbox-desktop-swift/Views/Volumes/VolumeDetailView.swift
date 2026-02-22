@@ -7,9 +7,8 @@ struct VolumeDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tab bar
+            // Detail toolbar
             HStack {
-                Spacer()
                 Picker("Tab", selection: $activeTab) {
                     ForEach(VolumeDetailTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -18,10 +17,10 @@ struct VolumeDetailView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 200)
-                Spacer()
             }
-            .frame(height: 52)
-            .overlay(alignment: .bottom) { Divider() }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
 
             if let volume {
                 switch activeTab {
