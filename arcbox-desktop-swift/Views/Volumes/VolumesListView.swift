@@ -53,10 +53,13 @@ struct VolumesListView: View {
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }
-                Button(action: {}) {
+                Button(action: { vm.showNewVolumeSheet = true }) {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .sheet(isPresented: $vm.showNewVolumeSheet) {
+            NewVolumeSheet()
         }
         .onAppear { vm.loadSampleData() }
     }

@@ -15,6 +15,7 @@ class VolumesViewModel {
     var selectedID: String? = nil
     var activeTab: VolumeDetailTab = .info
     var listWidth: CGFloat = 320
+    var showNewVolumeSheet: Bool = false
 
     var totalSize: String {
         let bytes: UInt64 = volumes.compactMap(\.sizeBytes).reduce(0, +)

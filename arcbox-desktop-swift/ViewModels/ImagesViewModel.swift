@@ -16,6 +16,7 @@ class ImagesViewModel {
     var selectedID: String? = nil
     var activeTab: ImageDetailTab = .info
     var listWidth: CGFloat = 320
+    var showPullImageSheet: Bool = false
 
     var totalSize: String {
         let bytes: UInt64 = images.map(\.sizeBytes).reduce(0, +)

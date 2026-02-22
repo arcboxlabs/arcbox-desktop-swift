@@ -43,10 +43,13 @@ struct NetworksListView: View {
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }
-                Button(action: {}) {
+                Button(action: { vm.showNewNetworkSheet = true }) {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .sheet(isPresented: $vm.showNewNetworkSheet) {
+            NewNetworkSheet()
         }
         .onAppear { vm.loadSampleData() }
     }

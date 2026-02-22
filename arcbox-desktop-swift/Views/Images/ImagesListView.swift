@@ -53,10 +53,13 @@ struct ImagesListView: View {
                 Button(action: {}) {
                     Image(systemName: "magnifyingglass")
                 }
-                Button(action: {}) {
+                Button(action: { vm.showPullImageSheet = true }) {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .sheet(isPresented: $vm.showPullImageSheet) {
+            PullImageSheet()
         }
         .onAppear { vm.loadSampleData() }
     }

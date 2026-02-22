@@ -15,6 +15,7 @@ class NetworksViewModel {
     var selectedID: String? = nil
     var activeTab: NetworkDetailTab = .info
     var listWidth: CGFloat = 320
+    var showNewNetworkSheet: Bool = false
 
     var networkCount: Int { networks.count }
 
