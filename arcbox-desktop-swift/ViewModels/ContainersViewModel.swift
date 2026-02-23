@@ -1,4 +1,5 @@
 import SwiftUI
+import ArcBoxClient
 
 /// Detail panel tab for containers
 enum ContainerDetailTab: String, CaseIterable, Identifiable {
@@ -88,12 +89,61 @@ class ContainersViewModel {
         expandedGroups.contains(group)
     }
 
-    // Mock actions
-    func startContainer(_ id: String) {}
-    func stopContainer(_ id: String) {}
-    func removeContainer(_ id: String) {}
+    // MARK: - gRPC Operations
 
-    /// Load sample data
+    /// Load containers from daemon via gRPC, falling back to sample data.
+    func loadContainers(client: ArcBoxClient?) async {
+        guard let client else {
+            loadSampleData()
+            return
+        }
+
+        do {
+            var request = Arcbox_V1_ListContainersRequest()
+            request.all = true
+            let response = try await client.containers.list(request)
+            let viewModels = response.containers.map { summary in
+                ContainerViewModel(from: summary)
+            }
+            containers = viewModels
+            // Expand all compose groups by default
+            for container in containers {
+                if let project = container.composeProject {
+                    expandedGroups.insert(project)
+                }
+            }
+        } catch {
+            // Fallback to sample data on error
+            loadSampleData()
+        }
+    }
+
+    func startContainer(_ id: String, client: ArcBoxClient?) async {
+        guard let client else { return }
+        var request = Arcbox_V1_StartContainerRequest()
+        request.id = id
+        _ = try? await client.containers.start(request)
+        await loadContainers(client: client)
+    }
+
+    func stopContainer(_ id: String, client: ArcBoxClient?) async {
+        guard let client else { return }
+        var request = Arcbox_V1_StopContainerRequest()
+        request.id = id
+        _ = try? await client.containers.stop(request)
+        await loadContainers(client: client)
+    }
+
+    func removeContainer(_ id: String, client: ArcBoxClient?) async {
+        guard let client else { return }
+        var request = Arcbox_V1_RemoveContainerRequest()
+        request.id = id
+        request.force = true
+        _ = try? await client.containers.remove(request)
+        await loadContainers(client: client)
+    }
+
+    /// Load sample data (fallback when daemon is not available)
     func loadSampleData() {
         containers = SampleData.containers
         // Expand all compose groups by default
@@ -102,5 +152,48 @@ class ContainersViewModel {
                 expandedGroups.insert(project)
             }
         }
+    }
+}
+
+// MARK: - Proto → UI Model Conversion
+
+extension ContainerViewModel {
+    /// Create a ContainerViewModel from a gRPC ContainerSummary.
+    init(from summary: Arcbox_V1_ContainerSummary) {
+        let name = summary.names.first.map {
+            $0.hasPrefix("/") ? String($0.dropFirst()) : $0
+        } ?? summary.id.prefix(12).description
+
+        let state: ContainerState = switch summary.state {
+        case "running": .running
+        case "paused": .paused
+        case "restarting": .restarting
+        case "dead": .dead
+        default: .stopped
+        }
+
+        let ports = summary.ports.map { port in
+            PortMapping(
+                hostPort: UInt16(port.hostPort),
+                containerPort: UInt16(port.containerPort),
+                protocol: port.protocol
+            )
+        }
+
+        let composeProject = summary.labels["com.docker.compose.project"]
+
+        self.init(
+            id: summary.id,
+            name: name,
+            image: summary.image,
+            state: state,
+            ports: ports,
+            createdAt: Date(timeIntervalSince1970: TimeInterval(summary.created)),
+            composeProject: composeProject,
+            labels: summary.labels,
+            cpuPercent: 0,
+            memoryMB: 0,
+            memoryLimitMB: 0
+        )
     }
 }

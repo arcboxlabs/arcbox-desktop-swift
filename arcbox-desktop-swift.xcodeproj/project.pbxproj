@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */ = {isa = PBXBuildFile; productRef = 657F65912F3A2ADB00C7005A /* ArcBoxClient */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "arcbox-desktop-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = "arcbox-desktop-swift";
 			packageProductDependencies = (
+				657F65912F3A2ADB00C7005A /* ArcBoxClient */,
 			);
 			productName = "arcbox-desktop-swift";
 			productReference = 657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 657F65722F3A2ADB00C7005A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				657F65902F3A2ADB00C7005A /* XCLocalSwiftPackageReference "Packages/ArcBoxClient" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 657F657C2F3A2ADB00C7005A /* Products */;
 			projectDirPath = "";
@@ -253,7 +262,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 2PGUTUV397;
+				DEVELOPMENT_TEAM = 8U3ZJ258K9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -287,7 +296,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 2PGUTUV397;
+				DEVELOPMENT_TEAM = 8U3ZJ258K9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -335,6 +344,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		657F65902F3A2ADB00C7005A /* XCLocalSwiftPackageReference "Packages/ArcBoxClient" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ArcBoxClient;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		657F65912F3A2ADB00C7005A /* ArcBoxClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArcBoxClient;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 657F65732F3A2ADB00C7005A /* Project object */;
 }
