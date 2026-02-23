@@ -3,7 +3,7 @@ import ArcBoxClient
 
 /// Column 2: container list with toolbar
 struct ContainersListView: View {
-    @State private var vm = ContainersViewModel()
+    @Environment(ContainersViewModel.self) private var vm
     @Environment(\.arcboxClient) private var client
 
     var body: some View {
