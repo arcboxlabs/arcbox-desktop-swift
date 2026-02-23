@@ -1,8 +1,10 @@
 import SwiftUI
+import ArcBoxClient
 
 /// Column 2: container list with toolbar
 struct ContainersListView: View {
-    @Environment(ContainersViewModel.self) private var vm
+    @State private var vm = ContainersViewModel()
+    @Environment(\.arcboxClient) private var client
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,10 +23,14 @@ struct ContainersListView: View {
                                 onToggle: { vm.toggleGroup(group.project) },
                                 onSelect: { vm.selectContainer($0) },
                                 onStartStop: { id, running in
-                                    if running { vm.stopContainer(id) }
-                                    else { vm.startContainer(id) }
+                                    Task {
+                                        if running { await vm.stopContainer(id, client: client) }
+                                        else { await vm.startContainer(id, client: client) }
+                                    }
                                 },
-                                onDelete: { vm.removeContainer($0) }
+                                onDelete: { id in
+                                    Task { await vm.removeContainer(id, client: client) }
+                                }
                             )
                         }
 
@@ -36,10 +42,14 @@ struct ContainersListView: View {
                                 indented: false,
                                 onSelect: { vm.selectContainer(container.id) },
                                 onStartStop: {
-                                    if container.isRunning { vm.stopContainer(container.id) }
-                                    else { vm.startContainer(container.id) }
+                                    Task {
+                                        if container.isRunning { await vm.stopContainer(container.id, client: client) }
+                                        else { await vm.startContainer(container.id, client: client) }
+                                    }
                                 },
-                                onDelete: { vm.removeContainer(container.id) }
+                                onDelete: {
+                                    Task { await vm.removeContainer(container.id, client: client) }
+                                }
                             )
                         }
                     }
@@ -59,8 +69,8 @@ struct ContainersListView: View {
                 }
             }
         }
-        .onAppear {
-            vm.loadSampleData()
+        .task {
+            await vm.loadContainers(client: client)
         }
         .sheet(isPresented: Bindable(vm).showNewContainerSheet) {
             NewContainerSheet()
