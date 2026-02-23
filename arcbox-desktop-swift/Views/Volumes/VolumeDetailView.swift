@@ -41,6 +41,7 @@ struct VolumeDetailView: View {
                 Spacer()
                 Text("No Selection")
                     .foregroundStyle(AppColors.textSecondary)
+                    .font(.system(size: 15))
                 Spacer()
             }
         }

@@ -28,20 +28,6 @@ struct ContainerTerminalTab: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            // Welcome message
-                            if debugShell {
-                                Text(
-                                    "Debug Shell provides useful commands & tools, making it easy to debug any container (even minimal/distroless)."
-                                )
-                                .foregroundStyle(Color.yellow)
-                                .padding(.bottom, 2)
-
-                                Text(
-                                    "It also allows installing over 80,000 packages."
-                                )
-                                .foregroundStyle(Color.yellow)
-                                .padding(.bottom, 12)
-                            }
 
                             // Output lines
                             ForEach(terminalLines) { line in
