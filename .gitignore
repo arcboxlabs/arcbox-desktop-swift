@@ -11,6 +11,9 @@ xcuserdata/
 # macOS
 .DS_Store
 
+# VSCode
+.vscode/
+
 # Swift Package Manager
 .build/
 .swiftpm/
