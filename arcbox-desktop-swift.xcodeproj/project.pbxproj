@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */ = {isa = PBXBuildFile; productRef = 657F65912F3A2ADB00C7005A /* ArcBoxClient */; };
+		DC0A11012F4E000000000001 /* DockerClient in Frameworks */ = {isa = PBXBuildFile; productRef = DC0A11002F4E000000000001 /* DockerClient */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */,
+				DC0A11012F4E000000000001 /* DockerClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,6 +75,7 @@
 			name = "arcbox-desktop-swift";
 			packageProductDependencies = (
 				657F65912F3A2ADB00C7005A /* ArcBoxClient */,
+				DC0A11002F4E000000000001 /* DockerClient */,
 			);
 			productName = "arcbox-desktop-swift";
 			productReference = 657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */;
@@ -104,6 +107,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				657F65902F3A2ADB00C7005A /* XCLocalSwiftPackageReference "Packages/ArcBoxClient" */,
+				DC0A11022F4E000000000001 /* XCLocalSwiftPackageReference "Packages/DockerClient" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 657F657C2F3A2ADB00C7005A /* Products */;
@@ -376,12 +380,20 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/ArcBoxClient;
 		};
+		DC0A11022F4E000000000001 /* XCLocalSwiftPackageReference "Packages/DockerClient" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/DockerClient;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		657F65912F3A2ADB00C7005A /* ArcBoxClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArcBoxClient;
+		};
+		DC0A11002F4E000000000001 /* DockerClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DockerClient;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
