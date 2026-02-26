@@ -41,6 +41,25 @@ public enum DockerClientError: Error, Sendable {
     case invalidJSON
 }
 
+/// A single line from Docker container logs.
+@available(macOS 15.0, *)
+public struct DockerLogLine: Sendable {
+    public enum Stream: Sendable {
+        case stdout
+        case stderr
+    }
+
+    public let stream: Stream
+    public let message: String
+    public let timestamp: String?
+
+    public init(stream: Stream, message: String, timestamp: String? = nil) {
+        self.stream = stream
+        self.message = message
+        self.timestamp = timestamp
+    }
+}
+
 /// A custom transport that routes OpenAPI requests through a Unix domain socket
 /// using AsyncHTTPClient's `http+unix://` URL scheme.
 struct UnixSocketTransport: ClientTransport {
@@ -236,6 +255,188 @@ public struct DockerClient: Sendable {
             ipAddress: ipAddress,
             mounts: mounts
         )
+    }
+
+    // MARK: - Container Logs
+
+    /// Fetch container logs as a batch (non-streaming).
+    public func fetchContainerLogs(
+        id: String,
+        tail: Int = 500,
+        timestamps: Bool = true
+    ) async throws -> [DockerLogLine] {
+        let data = try await rawContainerLogsRequest(
+            id: id, follow: false, tail: tail, timestamps: timestamps
+        )
+        return Self.parseMultiplexedStream(data, timestamps: timestamps)
+    }
+
+    /// Stream container logs in real-time. Cancel the Task to stop streaming.
+    public func streamContainerLogs(
+        id: String,
+        tail: Int = 500,
+        timestamps: Bool = true,
+        since: Int = 0
+    ) -> AsyncThrowingStream<DockerLogLine, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let response = try await rawContainerLogsHTTPResponse(
+                        id: id, follow: true, tail: tail, timestamps: timestamps, since: since
+                    )
+
+                    var buffer = Data()
+                    for try await var chunk in response.body {
+                        if Task.isCancelled { break }
+                        if let bytes = chunk.readBytes(length: chunk.readableBytes) {
+                            buffer.append(contentsOf: bytes)
+                        }
+                        // Parse complete frames from buffer
+                        while buffer.count >= 8 {
+                            let streamByte = buffer[buffer.startIndex]
+                            let sizeBytes = buffer[buffer.startIndex + 4 ..< buffer.startIndex + 8]
+                            let payloadSize = Int(
+                                UInt32(sizeBytes[sizeBytes.startIndex]) << 24
+                                | UInt32(sizeBytes[sizeBytes.startIndex + 1]) << 16
+                                | UInt32(sizeBytes[sizeBytes.startIndex + 2]) << 8
+                                | UInt32(sizeBytes[sizeBytes.startIndex + 3])
+                            )
+
+                            guard buffer.count >= 8 + payloadSize else { break }
+
+                            let payload = buffer[buffer.startIndex + 8 ..< buffer.startIndex + 8 + payloadSize]
+                            buffer.removeFirst(8 + payloadSize)
+
+                            let stream: DockerLogLine.Stream = streamByte == 2 ? .stderr : .stdout
+
+                            guard let text = String(data: payload, encoding: .utf8) else { continue }
+                            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                            for line in lines {
+                                let lineStr = String(line)
+                                if lineStr.isEmpty { continue }
+                                let (ts, msg) = timestamps
+                                    ? Self.splitTimestamp(lineStr)
+                                    : (nil, lineStr)
+                                continuation.yield(DockerLogLine(stream: stream, message: msg, timestamp: ts))
+                            }
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    if !Task.isCancelled {
+                        continuation.finish(throwing: error)
+                    } else {
+                        continuation.finish()
+                    }
+                }
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    /// Raw HTTP request for container logs, returns collected body data.
+    private func rawContainerLogsRequest(
+        id: String,
+        follow: Bool,
+        tail: Int,
+        timestamps: Bool,
+        since: Int = 0
+    ) async throws -> Data {
+        let response = try await rawContainerLogsHTTPResponse(
+            id: id, follow: follow, tail: tail, timestamps: timestamps, since: since
+        )
+
+        var data = Data()
+        for try await var chunk in response.body {
+            if let bytes = chunk.readBytes(length: chunk.readableBytes) {
+                data.append(contentsOf: bytes)
+            }
+        }
+        return data
+    }
+
+    /// Raw HTTP request for container logs, returns the HTTP response for streaming.
+    private func rawContainerLogsHTTPResponse(
+        id: String,
+        follow: Bool,
+        tail: Int,
+        timestamps: Bool,
+        since: Int = 0
+    ) async throws -> HTTPClientResponse {
+        let encodedSocket = socketPath
+            .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? socketPath
+        let encodedID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let path = Self.defaultServerURL.path
+            + "/containers/\(encodedID)/logs"
+            + "?stdout=true&stderr=true"
+            + "&follow=\(follow)"
+            + "&tail=\(tail)"
+            + "&timestamps=\(timestamps)"
+            + (since > 0 ? "&since=\(since)" : "")
+        let urlString = "http+unix://\(encodedSocket)\(path)"
+
+        var request = HTTPClientRequest(url: urlString)
+        request.method = .GET
+
+        let streamTimeout: TimeAmount = follow ? .hours(24) : timeout
+        let response = try await httpClient.execute(request, timeout: streamTimeout)
+        guard (200..<300).contains(response.status.code) else {
+            throw DockerClientError.invalidHTTPStatus(Int(response.status.code))
+        }
+        return response
+    }
+
+    /// Parse Docker multiplexed stream format into log lines.
+    ///
+    /// Each frame: 8-byte header (byte 0 = stream type, bytes 4-7 = payload size BE) + payload.
+    static func parseMultiplexedStream(_ data: Data, timestamps: Bool) -> [DockerLogLine] {
+        var lines: [DockerLogLine] = []
+        var offset = data.startIndex
+
+        while offset + 8 <= data.endIndex {
+            let streamByte = data[offset]
+            let sizeBytes = data[offset + 4 ..< offset + 8]
+            let payloadSize = Int(
+                UInt32(sizeBytes[sizeBytes.startIndex]) << 24
+                | UInt32(sizeBytes[sizeBytes.startIndex + 1]) << 16
+                | UInt32(sizeBytes[sizeBytes.startIndex + 2]) << 8
+                | UInt32(sizeBytes[sizeBytes.startIndex + 3])
+            )
+
+            guard offset + 8 + payloadSize <= data.endIndex else { break }
+
+            let payload = data[offset + 8 ..< offset + 8 + payloadSize]
+            offset += 8 + payloadSize
+
+            let stream: DockerLogLine.Stream = streamByte == 2 ? .stderr : .stdout
+
+            guard let text = String(data: payload, encoding: .utf8) else { continue }
+            let splitLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+            for line in splitLines {
+                let lineStr = String(line)
+                if lineStr.isEmpty { continue }
+                let (ts, msg) = timestamps ? splitTimestamp(lineStr) : (nil, lineStr)
+                lines.append(DockerLogLine(stream: stream, message: msg, timestamp: ts))
+            }
+        }
+
+        return lines
+    }
+
+    /// Split a Docker log line into timestamp and message.
+    /// Docker timestamps look like: "2024-01-15T10:23:45.123456789Z message here"
+    static func splitTimestamp(_ line: String) -> (timestamp: String?, message: String) {
+        // Docker timestamps end with 'Z' and are followed by a space
+        guard let spaceIndex = line.firstIndex(of: " "),
+              line[line.startIndex ..< spaceIndex].hasSuffix("Z")
+        else {
+            return (nil, line)
+        }
+        let timestamp = String(line[line.startIndex ..< spaceIndex])
+        let message = String(line[line.index(after: spaceIndex)...])
+        return (timestamp, message)
     }
 
     /// Gracefully shut down the underlying HTTP client.

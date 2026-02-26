@@ -1,25 +1,65 @@
 import SwiftUI
+import DockerClient
 
-/// Logs tab showing container log output
+/// Filter for log streams
+enum LogStreamFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case stdout = "Stdout"
+    case stderr = "Stderr"
+
+    var id: String { rawValue }
+}
+
+/// Which stream a log line came from
+enum LogStream {
+    case stdout
+    case stderr
+}
+
+/// A single log entry with metadata
+struct LogEntry: Identifiable {
+    let id = UUID()
+    let timestamp: String?
+    let stream: LogStream
+    let message: String
+}
+
+/// Logs tab showing real container log output with streaming support
 struct ContainerLogsTab: View {
     let container: ContainerViewModel
 
-    @State private var searchText = ""
+    @Environment(\.dockerClient) private var docker
+
     @State private var logEntries: [LogEntry] = []
+    @State private var searchText = "" 
+    @State private var streamFilter: LogStreamFilter = .all
+    @State private var isFollowing = true
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var streamTask: Task<Void, Never>?
+
+    private let maxLogEntries = 10_000
 
     var filteredEntries: [LogEntry] {
-        if searchText.isEmpty {
-            return logEntries
+        var entries = logEntries
+        switch streamFilter {
+        case .all: break
+        case .stdout: entries = entries.filter { $0.stream == .stdout }
+        case .stderr: entries = entries.filter { $0.stream == .stderr }
         }
-        return logEntries.filter {
-            $0.message.localizedCaseInsensitiveContains(searchText)
+        if !searchText.isEmpty {
+            entries = entries.filter {
+                $0.message.localizedCaseInsensitiveContains(searchText)
+            }
         }
+        return entries
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar with search and actions
+            // Toolbar
             HStack(spacing: 8) {
+                // Search field
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(AppColors.textSecondary)
@@ -33,7 +73,27 @@ struct ContainerLogsTab: View {
                 .background(AppColors.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
+                // Stream filter
+                Picker(selection: $streamFilter) {
+                    ForEach(LogStreamFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                } label: {
+                    EmptyView()
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+
                 Spacer()
+
+                // Follow toggle
+                Button(action: toggleFollow) {
+                    Image(systemName: isFollowing ? "arrow.down.to.line" : "pause")
+                        .font(.system(size: 12))
+                        .foregroundStyle(isFollowing ? AppColors.accent : AppColors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(isFollowing ? "Following logs" : "Paused")
 
                 Button(action: copyLogs) {
                     Image(systemName: "doc.on.doc")
@@ -57,38 +117,220 @@ struct ContainerLogsTab: View {
             Divider()
 
             // Log content
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredEntries) { entry in
-                            Text(entry.message)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(AppColors.text)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 1)
-                                .textSelection(.enabled)
-                                .id(entry.id)
+            if isLoading && logEntries.isEmpty {
+                Spacer()
+                ProgressView("Loading logs...")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+            } else if let error = errorMessage, logEntries.isEmpty {
+                Spacer()
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 24))
+                        .foregroundStyle(AppColors.textMuted)
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                Spacer()
+            } else if filteredEntries.isEmpty {
+                Spacer()
+                Text(logEntries.isEmpty ? "No logs available" : "No matching logs")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(filteredEntries) { entry in
+                                logLineView(entry)
+                                    .id(entry.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onAppear {
+                        // Jump to bottom immediately for historical logs
+                        if let last = filteredEntries.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
                         }
                     }
-                    .padding(.vertical, 4)
-                }
-                .onChange(of: logEntries.count) {
-                    if let last = logEntries.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    .onChange(of: logEntries.count) {
+                        if isFollowing, let last = filteredEntries.last {
+                            withAnimation(.easeOut(duration: 0.1)) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
+                        }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColors.background)
-        .onAppear {
-            loadSampleLogs()
+        .task(id: container.id) {
+            await startStreaming()
+        }
+        .onDisappear {
+            cancelStreaming()
         }
     }
 
+    @ViewBuilder
+    private func logLineView(_ entry: LogEntry) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            if let ts = entry.timestamp {
+                Text(formatTimestamp(ts))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(AppColors.textMuted)
+                    .lineLimit(1)
+                Text(" ")
+                    .font(.system(size: 12, design: .monospaced))
+            }
+            Text(entry.message)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(entry.stream == .stderr ? Color.red.opacity(0.85) : AppColors.text)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 1)
+    }
+
+    /// Format Docker RFC3339Nano timestamp to a shorter display form
+    private func formatTimestamp(_ ts: String) -> String {
+        // Docker timestamps: "2024-01-15T10:23:45.123456789Z"
+        // Show: "10:23:45"
+        guard let tIndex = ts.firstIndex(of: "T"),
+              let zIndex = ts.firstIndex(of: "Z") ?? ts.lastIndex(of: "+")
+        else {
+            return ts
+        }
+        let timePart = ts[ts.index(after: tIndex) ..< zIndex]
+        // Trim nanoseconds: "10:23:45.123456789" -> "10:23:45"
+        if let dotIndex = timePart.firstIndex(of: ".") {
+            return String(timePart[timePart.startIndex ..< dotIndex])
+        }
+        return String(timePart)
+    }
+
+    // MARK: - Actions
+
+    private func startStreaming() async {
+        cancelStreaming()
+        logEntries = []
+        isLoading = true
+        errorMessage = nil
+
+        guard let docker else {
+            errorMessage = "Docker client not available"
+            isLoading = false
+            return
+        }
+
+        // Phase 1: Batch-load historical logs (all at once)
+        do {
+            let historyLines = try await docker.fetchContainerLogs(
+                id: container.id,
+                tail: 500,
+                timestamps: true
+            )
+            logEntries = historyLines.map { line in
+                LogEntry(
+                    timestamp: line.timestamp,
+                    stream: line.stream == .stderr ? .stderr : .stdout,
+                    message: line.message
+                )
+            }
+        } catch {
+            if !Task.isCancelled {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isLoading = false
+
+        if Task.isCancelled { return }
+
+        // Phase 2: Stream only new logs going forward
+        guard isFollowing else { return }
+        let sinceTimestamp = Int(Date().timeIntervalSince1970)
+        let stream = docker.streamContainerLogs(
+            id: container.id,
+            tail: 0,
+            timestamps: true,
+            since: sinceTimestamp
+        )
+
+        do {
+            for try await line in stream {
+                if Task.isCancelled { break }
+                let entry = LogEntry(
+                    timestamp: line.timestamp,
+                    stream: line.stream == .stderr ? .stderr : .stdout,
+                    message: line.message
+                )
+                logEntries.append(entry)
+
+                // Trim if we exceed max
+                if logEntries.count > maxLogEntries {
+                    logEntries.removeFirst(logEntries.count - maxLogEntries)
+                }
+            }
+        } catch {
+            if !Task.isCancelled {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func toggleFollow() {
+        isFollowing.toggle()
+        if isFollowing {
+            // Resume streaming for new logs
+            streamTask?.cancel()
+            streamTask = Task {
+                guard let docker else { return }
+                let sinceTimestamp = Int(Date().timeIntervalSince1970)
+                let stream = docker.streamContainerLogs(
+                    id: container.id,
+                    tail: 0,
+                    timestamps: true,
+                    since: sinceTimestamp
+                )
+                do {
+                    for try await line in stream {
+                        if Task.isCancelled { break }
+                        let entry = LogEntry(
+                            timestamp: line.timestamp,
+                            stream: line.stream == .stderr ? .stderr : .stdout,
+                            message: line.message
+                        )
+                        logEntries.append(entry)
+                        if logEntries.count > maxLogEntries {
+                            logEntries.removeFirst(logEntries.count - maxLogEntries)
+                        }
+                    }
+                } catch {}
+            }
+        } else {
+            // Pause: cancel the streaming task, keep existing logs
+            cancelStreaming()
+        }
+    }
+
+    private func cancelStreaming() {
+        streamTask?.cancel()
+        streamTask = nil
+    }
+
     private func copyLogs() {
-        let text = filteredEntries.map(\.message).joined(separator: "\n")
+        let text = filteredEntries.map { entry in
+            if let ts = entry.timestamp {
+                return "\(ts) \(entry.message)"
+            }
+            return entry.message
+        }.joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
@@ -96,103 +338,4 @@ struct ContainerLogsTab: View {
     private func clearLogs() {
         logEntries.removeAll()
     }
-
-    private func loadSampleLogs() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy/MM/dd HH:mm:ss"
-
-        let baseDate = Date().addingTimeInterval(-300)
-        let imageName = container.image.components(separatedBy: ":").first ?? container.image
-
-        var entries: [LogEntry] = []
-
-        switch imageName {
-        case let name where name.contains("nginx"):
-            // nginx-style logs
-            let nginxStartup = [
-                "nginx: [notice] 1#1: using the \"epoll\" event method",
-                "nginx: [notice] 1#1: nginx/1.25.3",
-                "nginx: [notice] 1#1: built by gcc 12.2.0 (Debian 12.2.0-14)",
-                "nginx: [notice] 1#1: OS: Linux 6.6.12-linuxkit",
-            ]
-            for (i, msg) in nginxStartup.enumerated() {
-                let ts = formatter.string(from: baseDate.addingTimeInterval(Double(i)))
-                entries.append(LogEntry(message: "\(ts) \(msg)"))
-            }
-            for i in 1...41 {
-                let ts = formatter.string(from: baseDate.addingTimeInterval(Double(i + 4)))
-                entries.append(
-                    LogEntry(
-                        message: "\(ts) nginx: [notice] 1#1: start worker process \(i)"
-                    ))
-            }
-            let accessLogs = [
-                "\"GET / HTTP/1.1\" 200 8702 \"-\" \"Mozilla/5.0\"",
-                "\"GET /assets/stylesheets/application.css HTTP/1.1\" 200",
-                "\"GET /assets/stylesheets/application-dark.css HTTP/1.1\" 200",
-                "\"GET /assets/javascripts/modernizr.js HTTP/1.1\" 200",
-                "\"GET /css/styles.css HTTP/1.1\" 200",
-                "\"GET /assets/fonts/material-icons.woff2 HTTP/1.1\" 200",
-                "\"GET /assets/fonts/font-awesome.woff2 HTTP/1.1\" 200",
-                "\"GET /assets/javascripts/application.js HTTP/1.1\" 200",
-                "\"GET /css/dark-mode.css HTTP/1.1\" 200",
-                "\"GET /images/docker-labs-logo.svg HTTP/1.1\" 200",
-                "\"GET /tutorial/ HTTP/1.1\" 200 1024",
-                "\"GET /tutorial/tutorial-in-dashboard/ HTTP/1.1\" 200",
-                "\"GET /assets/fonts/specimen/MaterialIcons.woff2 HTTP/1.1\" 200",
-                "\"GET /fonts/hinted-Geomanist-Book.woff2 HTTP/1.1\" 200",
-                "\"GET /assets/fonts/specimen/ForkAwesome.woff2 HTTP/1.1\" 200",
-                "\"GET /assets/images/favicon.png HTTP/1.1\" 200",
-            ]
-            let accessTs = formatter.string(
-                from: baseDate.addingTimeInterval(Double(nginxStartup.count + 42)))
-            for log in accessLogs {
-                entries.append(
-                    LogEntry(
-                        message:
-                            "192.168.215.1 - - [\(accessTs) +0000] \(log)"
-                    ))
-            }
-
-        case let name where name.contains("node"):
-            let nodeLogs = [
-                "Server starting...",
-                "Loading environment variables",
-                "Connected to database",
-                "API routes registered",
-                "Server listening on port 3000",
-                "GET /api/health 200 12ms",
-                "GET /api/users 200 45ms",
-                "POST /api/auth/login 200 89ms",
-            ]
-            for (i, msg) in nodeLogs.enumerated() {
-                let ts = formatter.string(from: baseDate.addingTimeInterval(Double(i * 2)))
-                entries.append(LogEntry(message: "\(ts) [info] \(msg)"))
-            }
-
-        case let name where name.contains("postgres"):
-            let pgLogs = [
-                "PostgreSQL init process complete; ready for start up.",
-                "LOG:  database system is ready to accept connections",
-                "LOG:  listening on IPv4 address \"0.0.0.0\", port 5432",
-                "LOG:  listening on IPv6 address \"::\", port 5432",
-                "LOG:  checkpoint starting: time",
-                "LOG:  checkpoint complete",
-            ]
-            for (i, msg) in pgLogs.enumerated() {
-                let ts = formatter.string(from: baseDate.addingTimeInterval(Double(i * 3)))
-                entries.append(LogEntry(message: "\(ts) \(msg)"))
-            }
-
-        default:
-            entries.append(LogEntry(message: "No logs available"))
-        }
-
-        logEntries = entries
-    }
-}
-
-struct LogEntry: Identifiable {
-    let id = UUID()
-    let message: String
 }
