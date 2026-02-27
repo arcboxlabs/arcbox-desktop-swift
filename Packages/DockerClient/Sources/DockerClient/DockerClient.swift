@@ -43,6 +43,17 @@ public struct ContainerInspectSnapshot: Sendable {
 }
 
 @available(macOS 15.0, *)
+public struct ImageInspectSnapshot: Sendable {
+    public let labels: [String: String]
+    public let rootfsMountPath: String?
+
+    public init(labels: [String: String], rootfsMountPath: String? = nil) {
+        self.labels = labels
+        self.rootfsMountPath = rootfsMountPath
+    }
+}
+
+@available(macOS 15.0, *)
 public enum DockerClientError: Error, Sendable {
     case invalidHTTPStatus(Int)
     case invalidResponseBody
@@ -276,6 +287,53 @@ public struct DockerClient: Sendable {
         )
     }
 
+    /// Raw image inspect fallback that bypasses generated date decoding.
+    /// Parses only fields used by UI.
+    public func inspectImageSnapshot(id: String) async throws -> ImageInspectSnapshot {
+        let encodedSocket = socketPath
+            .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? socketPath
+        let encodedID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let path = Self.defaultServerURL.path + "/images/\(encodedID)/json"
+        let urlString = "http+unix://\(encodedSocket)\(path)"
+
+        var request = HTTPClientRequest(url: urlString)
+        request.method = .GET
+        request.headers.add(name: "Accept", value: "application/json")
+
+        let response = try await httpClient.execute(request, timeout: timeout)
+        guard (200..<300).contains(response.status.code) else {
+            throw DockerClientError.invalidHTTPStatus(Int(response.status.code))
+        }
+
+        var data = Data()
+        for try await var chunk in response.body {
+            if let bytes = chunk.readBytes(length: chunk.readableBytes) {
+                data.append(contentsOf: bytes)
+            }
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw DockerClientError.invalidJSON
+        }
+
+        let config = json["Config"] as? [String: Any]
+        let containerConfig = json["ContainerConfig"] as? [String: Any]
+        let labels = Self.extractStringMap(config?["Labels"])
+            ?? Self.extractStringMap(containerConfig?["Labels"])
+            ?? [:]
+
+        let graphDriver = json["GraphDriver"] as? [String: Any]
+        let graphDriverData = graphDriver?["Data"] as? [String: Any]
+        let rootfsMountPath = Self.normalized(graphDriverData?["MergedDir"] as? String)
+            ?? Self.normalized(graphDriverData?["UpperDir"] as? String)
+            ?? Self.normalized(graphDriverData?["Dir"] as? String)
+
+        return ImageInspectSnapshot(
+            labels: labels,
+            rootfsMountPath: rootfsMountPath
+        )
+    }
+
     // MARK: - Container Logs
 
     /// Fetch container logs as a batch (non-streaming).
@@ -467,5 +525,17 @@ public struct DockerClient: Sendable {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func extractStringMap(_ value: Any?) -> [String: String]? {
+        guard let raw = value as? [String: Any] else { return nil }
+        var normalizedMap: [String: String] = [:]
+        normalizedMap.reserveCapacity(raw.count)
+        for (key, val) in raw {
+            if let stringValue = normalized(val as? String) {
+                normalizedMap[key] = stringValue
+            }
+        }
+        return normalizedMap
     }
 }
