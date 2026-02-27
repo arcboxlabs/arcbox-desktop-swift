@@ -411,10 +411,11 @@ class ContainersViewModel {
                 id,
                 domain: Self.normalized(snapshot.domainname),
                 ipAddress: Self.normalized(snapshot.ipAddress),
-                mounts: mounts
+                mounts: mounts,
+                rootfsMountPath: Self.normalized(snapshot.rootfsMountPath)
             )
             print(
-                "[ContainersVM] Raw inspect snapshot for \(id), domain=\(Self.normalized(snapshot.domainname) ?? "-"), ip=\(Self.normalized(snapshot.ipAddress) ?? "-"), mounts=\(mounts.count)"
+                "[ContainersVM] Raw inspect snapshot for \(id), domain=\(Self.normalized(snapshot.domainname) ?? "-"), ip=\(Self.normalized(snapshot.ipAddress) ?? "-"), mounts=\(mounts.count), rootfs=\(Self.normalized(snapshot.rootfsMountPath) ?? "-")"
             )
         } catch {
             print("[ContainersVM] Raw inspect snapshot failed for \(id): \(error)")

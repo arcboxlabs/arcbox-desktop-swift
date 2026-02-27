@@ -80,10 +80,7 @@ struct ContainerViewModel: Identifiable, Hashable {
     }
 
     var resolvedRootFSMountPath: String? {
-        if let preferredRootFSMountPath {
-            return preferredRootFSMountPath
-        }
-        return Self.inferOrbStackRootFSMountPath(containerName: name)
+        preferredRootFSMountPath
     }
 
     static func inferRootFSMountPath(
@@ -142,23 +139,4 @@ struct ContainerViewModel: Identifiable, Hashable {
         return trimmed
     }
 
-    private static func inferOrbStackRootFSMountPath(containerName: String) -> String? {
-        guard !containerName.isEmpty else { return nil }
-
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let candidateURL = home
-            .appendingPathComponent("OrbStack", isDirectory: true)
-            .appendingPathComponent("docker", isDirectory: true)
-            .appendingPathComponent("containers", isDirectory: true)
-            .appendingPathComponent(containerName, isDirectory: true)
-
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: candidateURL.path, isDirectory: &isDirectory),
-              isDirectory.boolValue
-        else {
-            return nil
-        }
-
-        return candidateURL.path
-    }
 }

@@ -3,6 +3,7 @@ import OpenAPIRuntime
 import OpenAPIAsyncHTTPClient
 import AsyncHTTPClient
 import NIOCore
+import NIOPosix
 import NIOHTTP1
 import HTTPTypes
 
@@ -26,11 +27,18 @@ public struct ContainerInspectSnapshot: Sendable {
     public let domainname: String?
     public let ipAddress: String?
     public let mounts: [ContainerInspectMountSnapshot]
+    public let rootfsMountPath: String?
 
-    public init(domainname: String?, ipAddress: String?, mounts: [ContainerInspectMountSnapshot]) {
+    public init(
+        domainname: String?,
+        ipAddress: String?,
+        mounts: [ContainerInspectMountSnapshot],
+        rootfsMountPath: String? = nil
+    ) {
         self.domainname = domainname
         self.ipAddress = ipAddress
         self.mounts = mounts
+        self.rootfsMountPath = rootfsMountPath
     }
 }
 
@@ -118,17 +126,16 @@ struct UnixSocketTransport: ClientTransport {
         case .head, .connect, .trace:
             responseBody = nil
         default:
-            let contentLength: HTTPBody.Length
-            if let lengthStr = headerFields[.contentLength], let len = Int64(lengthStr) {
-                contentLength = .known(len)
-            } else {
-                contentLength = .unknown
+            // Eagerly collect the full body while the connection is still alive.
+            // Docker often sends `connection: close` with chunked encoding,
+            // which can drop the socket before a lazy consumer reads the data.
+            var collected = Data()
+            for try await var chunk in httpResponse.body {
+                if let bytes = chunk.readBytes(length: chunk.readableBytes) {
+                    collected.append(contentsOf: bytes)
+                }
             }
-            responseBody = HTTPBody(
-                httpResponse.body.map { $0.readableBytesView },
-                length: contentLength,
-                iterationBehavior: .single
-            )
+            responseBody = HTTPBody(collected)
         }
 
         let response = HTTPResponse(
@@ -162,8 +169,11 @@ struct UnixSocketTransport: ClientTransport {
 /// ```
 @available(macOS 15.0, *)
 public struct DockerClient: Sendable {
-    /// Default Unix socket path for the Docker daemon.
-    public static let defaultSocketPath = "/var/run/docker.sock"
+    /// Default Unix socket path for the Docker daemon (ArcBox runtime).
+    public static let defaultSocketPath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.arcbox/docker.sock"
+    }()
 
     /// Default server URL matching the OpenAPI spec base path.
     public static let defaultServerURL = try! Servers.Server1.url()
@@ -180,7 +190,10 @@ public struct DockerClient: Sendable {
     ///
     /// - Parameter socketPath: Path to the Docker daemon Unix socket.
     public init(socketPath: String = DockerClient.defaultSocketPath) {
-        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        // Use POSIX sockets (MultiThreadedEventLoopGroup) instead of the default
+        // NIOTransportServices (Network.framework) which has issues with Unix
+        // domain sockets on macOS, causing ENETDOWN errors.
+        let httpClient = HTTPClient(eventLoopGroupProvider: .shared(MultiThreadedEventLoopGroup.singleton))
         let transport = UnixSocketTransport(client: httpClient, socketPath: socketPath)
         self.httpClient = httpClient
         self.socketPath = socketPath
@@ -250,10 +263,16 @@ public struct DockerClient: Sendable {
             )
         }
 
+        let graphDriver = json["GraphDriver"] as? [String: Any]
+        let graphDriverData = graphDriver?["Data"] as? [String: Any]
+        let rootfsMountPath = Self.normalized(graphDriverData?["MergedDir"] as? String)
+            ?? Self.normalized(graphDriverData?["UpperDir"] as? String)
+
         return ContainerInspectSnapshot(
             domainname: domainname,
             ipAddress: ipAddress,
-            mounts: mounts
+            mounts: mounts,
+            rootfsMountPath: rootfsMountPath
         )
     }
 
