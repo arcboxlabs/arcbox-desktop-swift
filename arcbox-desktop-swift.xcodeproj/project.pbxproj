@@ -9,10 +9,11 @@
 /* Begin PBXBuildFile section */
 		657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */ = {isa = PBXBuildFile; productRef = 657F65912F3A2ADB00C7005A /* ArcBoxClient */; };
 		DC0A11012F4E000000000001 /* DockerClient in Frameworks */ = {isa = PBXBuildFile; productRef = DC0A11002F4E000000000001 /* DockerClient */; };
+		DC0B11012F4E000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = DC0B11002F4E000000000001 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "arcbox-desktop-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		657F657B2F3A2ADB00C7005A /* ArcBox Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ArcBox Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		657F65A02F3A2ADB00C7005A /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -31,6 +32,7 @@
 			files = (
 				657F65922F3A2ADB00C7005A /* ArcBoxClient in Frameworks */,
 				DC0A11012F4E000000000001 /* DockerClient in Frameworks */,
+				DC0B11012F4E000000000001 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -49,7 +51,7 @@
 		657F657C2F3A2ADB00C7005A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */,
+				657F657B2F3A2ADB00C7005A /* ArcBox Desktop.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,9 +78,10 @@
 			packageProductDependencies = (
 				657F65912F3A2ADB00C7005A /* ArcBoxClient */,
 				DC0A11002F4E000000000001 /* DockerClient */,
+				DC0B11002F4E000000000001 /* SwiftTerm */,
 			);
 			productName = "arcbox-desktop-swift";
-			productReference = 657F657B2F3A2ADB00C7005A /* arcbox-desktop-swift.app */;
+			productReference = 657F657B2F3A2ADB00C7005A /* ArcBox Desktop.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -108,6 +111,7 @@
 			packageReferences = (
 				657F65902F3A2ADB00C7005A /* XCLocalSwiftPackageReference "Packages/ArcBoxClient" */,
 				DC0A11022F4E000000000001 /* XCLocalSwiftPackageReference "Packages/DockerClient" */,
+				DC0B11022F4E000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 657F657C2F3A2ADB00C7005A /* Products */;
@@ -374,6 +378,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		DC0B11022F4E000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		657F65912F3A2ADB00C7005A /* ArcBoxClient */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -382,6 +397,11 @@
 		DC0A11002F4E000000000001 /* DockerClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DockerClient;
+		};
+		DC0B11002F4E000000000001 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC0B11022F4E000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
