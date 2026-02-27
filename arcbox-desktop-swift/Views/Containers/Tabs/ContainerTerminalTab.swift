@@ -1,125 +1,274 @@
 import SwiftUI
+import SwiftTerm
+import ArcBoxClient
+import DockerClient
 
-/// Terminal tab showing an interactive-style terminal view
+/// Terminal tab providing an interactive shell into a running container.
 struct ContainerTerminalTab: View {
     let container: ContainerViewModel
 
-    @State private var inputText = ""
-    @State private var terminalLines: [TerminalLine] = []
-    @State private var debugShell = false
+    @Environment(ContainersViewModel.self) private var vm
+    @Environment(\.arcboxClient) private var client
+    @Environment(\.dockerClient) private var docker
+
+    @State private var session = DockerTerminalSession()
+    @State private var selectedShell = "/bin/sh"
+
+    private let availableShells = ["/bin/sh", "/bin/bash", "/bin/zsh"]
 
     var body: some View {
         VStack(spacing: 0) {
-            // Terminal toolbar
-            HStack {
-                Spacer()
-                Toggle("Debug Shell", isOn: $debugShell)
-                    .toggleStyle(.checkbox)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-
-            Divider()
-
-            // Terminal content
-            VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-
-                            // Output lines
-                            ForEach(terminalLines) { line in
-                                Text(line.text)
-                                    .foregroundStyle(line.color)
-                                    .id(line.id)
-                            }
-
-                            // Current prompt line with input
-                            HStack(spacing: 0) {
-                                Text("/ # ")
-                                    .foregroundStyle(Color.white)
-                                TextField("", text: $inputText)
-                                    .textFieldStyle(.plain)
-                                    .foregroundStyle(Color.white)
-                                    .onSubmit {
-                                        submitCommand()
-                                    }
-                            }
-                            .id("prompt")
+            if container.state == .running {
+                // Toolbar
+                HStack(spacing: 8) {
+                    Picker("Shell", selection: $selectedShell) {
+                        ForEach(availableShells, id: \.self) { shell in
+                            Text(shell).tag(shell)
                         }
-                        .font(.system(size: 13, design: .monospaced))
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .onChange(of: terminalLines.count) {
-                        proxy.scrollTo("prompt", anchor: .bottom)
+                    .pickerStyle(.menu)
+                    .frame(width: 140)
+                    .disabled(session.state == .connected)
+
+                    Spacer()
+
+                    if session.state == .connected {
+                        Button(action: { session.disconnect() }) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Disconnect")
+                    } else if session.state == .disconnected || session.state == .idle {
+                        Button(action: reconnect) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Reconnect")
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+
+                Divider()
             }
-            .background(Color(red: 0.1, green: 0.1, blue: 0.1))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Terminal content
+            if container.state != .running {
+                notRunningView
+            } else {
+                switch session.state {
+                case .error(let message):
+                    errorView(message)
+                default:
+                    terminalContent
+                }
+            }
         }
-        .background(Color(red: 0.1, green: 0.1, blue: 0.1))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColors.background)
+        .task(id: container.id) {
+            connectIfRunning()
+        }
+        .onDisappear {
+            session.disconnect()
+        }
+        .onChange(of: container.state) { _, newState in
+            if newState != .running {
+                session.disconnect()
+            }
+        }
     }
 
-    private func submitCommand() {
-        let cmd = inputText.trimmingCharacters(in: .whitespaces)
-        guard !cmd.isEmpty else { return }
+    private var terminalContent: some View {
+        SwiftTermView(delegate: TerminalBridge(session: session)) { terminalView in
+            // Configure light-theme appearance
+            terminalView.nativeBackgroundColor = NSColor.white
+            terminalView.nativeForegroundColor = NSColor.black
+            terminalView.caretColor = NSColor.black
+            terminalView.selectedTextBackgroundColor = NSColor(
+                red: 0.0, green: 0.48, blue: 1.0, alpha: 0.2
+            )
 
-        // Add the command line to output
-        terminalLines.append(
-            TerminalLine(text: "/ # \(cmd)", color: .white)
-        )
+            // Install light-friendly ANSI palette (16 colors)
+            func c(_ r: UInt16, _ g: UInt16, _ b: UInt16) -> SwiftTerm.Color {
+                SwiftTerm.Color(red: r * 257, green: g * 257, blue: b * 257)
+            }
+            terminalView.installColors([
+                // Normal colors (0-7)
+                c(0x00, 0x00, 0x00),   // black
+                c(0xC4, 0x1A, 0x16),   // red
+                c(0x2D, 0xA4, 0x4E),   // green
+                c(0xCF, 0x8F, 0x09),   // yellow
+                c(0x1A, 0x5C, 0xC8),   // blue
+                c(0xB9, 0x39, 0xB5),   // magenta
+                c(0x0E, 0x83, 0x87),   // cyan
+                c(0xBF, 0xBF, 0xBF),   // white
+                // Bright colors (8-15)
+                c(0x60, 0x60, 0x60),   // bright black
+                c(0xDE, 0x35, 0x35),   // bright red
+                c(0x3F, 0xC5, 0x5F),   // bright green
+                c(0xEB, 0xB5, 0x20),   // bright yellow
+                c(0x3A, 0x7C, 0xF0),   // bright blue
+                c(0xD0, 0x5F, 0xCC),   // bright magenta
+                c(0x1C, 0xAB, 0xAF),   // bright cyan
+                c(0xFF, 0xFF, 0xFF),   // bright white
+            ])
 
-        // Simulate basic command responses
-        let response = simulateCommand(cmd)
-        for line in response {
-            terminalLines.append(line)
+            // Connect session
+            session.connect(
+                containerID: container.id,
+                shell: selectedShell,
+                terminalView: terminalView
+            )
         }
-
-        inputText = ""
     }
 
-    private func simulateCommand(_ cmd: String) -> [TerminalLine] {
-        switch cmd.lowercased() {
-        case "ls":
-            return [
-                TerminalLine(
-                    text:
-                        "bin   dev   docker-entrypoint.d   docker-entrypoint.sh   etc   home   lib   media   mnt   opt   proc   root   run   sbin   srv   sys   tmp   usr   var",
-                    color: .white)
-            ]
-        case "whoami":
-            return [TerminalLine(text: "root", color: .white)]
-        case "hostname":
-            return [TerminalLine(text: container.id, color: .white)]
-        case "pwd":
-            return [TerminalLine(text: "/", color: .white)]
-        case "uname -a", "uname":
-            return [
-                TerminalLine(
-                    text: "Linux \(container.id) 6.6.12-linuxkit #1 SMP aarch64 GNU/Linux",
-                    color: .white)
-            ]
-        case "cat /etc/os-release":
-            return [
-                TerminalLine(
-                    text: "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"", color: .white),
-                TerminalLine(text: "NAME=\"Debian GNU/Linux\"", color: .white),
-                TerminalLine(text: "VERSION_ID=\"12\"", color: .white),
-            ]
-        default:
-            return [
-                TerminalLine(text: "sh: \(cmd): not found", color: Color.red.opacity(0.8))
-            ]
+    private var notRunningView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 16) {
+                // Container icon
+                ZStack {
+                    Circle()
+                        .fill(AppColors.surfaceElevated)
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 26))
+                        .foregroundStyle(AppColors.textMuted)
+                }
+
+                // Container name
+                Text(container.name)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.text)
+
+                // Status badge
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(container.state.color)
+                        .frame(width: 8, height: 8)
+                    Text(container.state.label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                // Start button
+                Button(action: startContainer) {
+                    if container.isTransitioning {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 16, height: 16)
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 11))
+                            Text("Start")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(container.isTransitioning)
+                .padding(.top, 4)
+
+                // Hint text
+                Text("Start the container to open a terminal session.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppColors.textMuted)
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 32))
+                .foregroundStyle(AppColors.textMuted)
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(AppColors.textSecondary)
+            Button("Retry") {
+                reconnect()
+            }
+            .buttonStyle(.bordered)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func connectIfRunning() {
+        guard container.state == .running else { return }
+        // Connection happens in SwiftTermView's onTerminalCreated callback
+        // If already disconnected, the view will be recreated
+    }
+
+    private func reconnect() {
+        session.disconnect()
+        session.state = .idle
+    }
+
+    private func startContainer() {
+        Task {
+            if docker != nil {
+                await vm.startContainerDocker(container.id, docker: docker)
+            } else {
+                await vm.startContainer(container.id, client: client)
+            }
         }
     }
 }
 
-struct TerminalLine: Identifiable {
-    let id = UUID()
-    let text: String
-    let color: Color
+// MARK: - Terminal Bridge
+
+/// Bridges SwiftTerm delegate callbacks to DockerTerminalSession.
+///
+/// This class is intentionally not MainActor-isolated because SwiftTerm
+/// invokes delegate methods on various threads.
+nonisolated class TerminalBridge: NSObject, TerminalViewDelegate {
+    private let session: DockerTerminalSession
+
+    init(session: DockerTerminalSession) {
+        self.session = session
+    }
+
+    func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        let sendData = Data(data)
+        Task { @MainActor in
+            session.send(sendData)
+        }
+    }
+
+    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
+        Task { @MainActor in
+            session.resize(cols: newCols, rows: newRows)
+        }
+    }
+
+    func scrolled(source: TerminalView, position: Double) {}
+    func setTerminalTitle(source: TerminalView, title: String) {}
+    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+    func clipboardCopy(source: TerminalView, content: Data) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setData(content, forType: .string)
+    }
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        if let url = URL(string: link) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+    func bell(source: TerminalView) {
+        NSSound.beep()
+    }
+    func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
 }

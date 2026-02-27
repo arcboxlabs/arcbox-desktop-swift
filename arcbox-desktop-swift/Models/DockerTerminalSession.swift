@@ -1,0 +1,183 @@
+import Foundation
+import SwiftTerm
+
+/// Manages an interactive docker exec session using PTY + Process.
+///
+/// Connects a SwiftTerm `TerminalView` to a `docker exec -it` process,
+/// providing full bidirectional terminal I/O with PTY support.
+@MainActor
+@Observable
+class DockerTerminalSession {
+    enum State: Equatable {
+        case idle
+        case connecting
+        case connected
+        case disconnected
+        case error(String)
+    }
+
+    var state: State = .idle
+
+    private var process: Process?
+    private var masterFD: Int32 = -1
+    private var readTask: Task<Void, Never>?
+    private weak var terminalView: TerminalView?
+
+    /// Connect to a container's shell via `docker exec -it`.
+    func connect(containerID: String, shell: String, terminalView: TerminalView) {
+        disconnect()
+        self.terminalView = terminalView
+        state = .connecting
+
+        guard let dockerPath = Self.findDockerCLI() else {
+            state = .error("Docker CLI not found")
+            return
+        }
+
+        // Create PTY pair
+        var master: Int32 = -1
+        var slave: Int32 = -1
+        guard openpty(&master, &slave, nil, nil, nil) == 0 else {
+            state = .error("Failed to create PTY")
+            return
+        }
+        masterFD = master
+
+        // Set initial terminal size from SwiftTerm (use sensible defaults if not yet laid out)
+        let terminal = terminalView.getTerminal()
+        let cols = max(terminal.cols, 80)
+        let rows = max(terminal.rows, 24)
+        var winSize = winsize()
+        winSize.ws_col = UInt16(cols)
+        winSize.ws_row = UInt16(rows)
+        _ = ioctl(master, TIOCSWINSZ, &winSize)
+
+        // Configure process
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: dockerPath)
+        proc.arguments = ["exec", "-it", containerID, shell]
+        proc.standardInput = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
+        proc.standardOutput = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
+        proc.standardError = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
+
+        // Capture the master FD value for use in detached task
+        let masterForRead = master
+
+        // Start reading from PTY master
+        readTask = Task.detached { [weak self] in
+            let bufferSize = 8192
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { buffer.deallocate() }
+
+            while !Task.isCancelled {
+                let bytesRead = read(masterForRead, buffer, bufferSize)
+                if bytesRead <= 0 { break }
+                let data = Array(UnsafeBufferPointer(start: buffer, count: bytesRead))
+                await MainActor.run { [weak self] in
+                    self?.terminalView?.feed(byteArray: ArraySlice(data))
+                }
+            }
+
+            await MainActor.run { [weak self] in
+                if self?.state == .connected {
+                    self?.state = .disconnected
+                }
+            }
+        }
+
+        // Handle process termination
+        proc.terminationHandler = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                if self?.state == .connected {
+                    self?.state = .disconnected
+                }
+            }
+        }
+
+        do {
+            try proc.run()
+            // Close slave FD in parent process — the child owns it now
+            close(slave)
+            process = proc
+            state = .connected
+        } catch {
+            close(slave)
+            close(master)
+            masterFD = -1
+            state = .error(error.localizedDescription)
+        }
+    }
+
+    /// Send data from the terminal to the docker exec process stdin.
+    func send(_ data: Data) {
+        guard masterFD >= 0 else { return }
+        data.withUnsafeBytes { rawBuffer in
+            guard let ptr = rawBuffer.baseAddress else { return }
+            _ = write(masterFD, ptr, rawBuffer.count)
+        }
+    }
+
+    /// Update the PTY window size (called when terminal view resizes).
+    func resize(cols: Int, rows: Int) {
+        guard masterFD >= 0, cols > 0, rows > 0 else { return }
+        var winSize = winsize()
+        winSize.ws_col = UInt16(cols)
+        winSize.ws_row = UInt16(rows)
+        _ = ioctl(masterFD, TIOCSWINSZ, &winSize)
+    }
+
+    /// Disconnect and clean up the session.
+    func disconnect() {
+        readTask?.cancel()
+        readTask = nil
+
+        if let proc = process, proc.isRunning {
+            proc.terminate()
+        }
+        process = nil
+
+        if masterFD >= 0 {
+            close(masterFD)
+            masterFD = -1
+        }
+
+        terminalView = nil
+
+        if state == .connected || state == .connecting {
+            state = .disconnected
+        }
+    }
+
+    // MARK: - Docker CLI Discovery
+
+    nonisolated private static let dockerSearchPaths = [
+        "/usr/local/bin/docker",
+        "/opt/homebrew/bin/docker",
+        "/usr/bin/docker",
+    ]
+
+    nonisolated private static func findDockerCLI() -> String? {
+        for path in dockerSearchPaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        // Fallback: check PATH
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        proc.arguments = ["docker"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let path, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        } catch {}
+        return nil
+    }
+}
