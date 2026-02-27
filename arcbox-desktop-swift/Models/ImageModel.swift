@@ -32,6 +32,40 @@ struct ImageViewModel: Identifiable, Hashable {
     var createdAgo: String {
         relativeTime(from: createdAt)
     }
+
+    static let rootfsMountPathLabelKeys = [
+        "arcbox.rootfs.mount.path",
+        "com.arcbox.rootfs.mount.path",
+        "arcbox.image.rootfs.mount.path",
+        "com.arcbox.image.rootfs.mount.path",
+        "arcbox.rootfs.path",
+        "com.arcbox.rootfs.path",
+        "rootfs.mount.path",
+    ]
+
+    static func inferRootFSMountPath(
+        explicitPath: String?,
+        labels: [String: String]
+    ) -> String? {
+        if let explicitPath = normalizedPath(explicitPath) {
+            return explicitPath
+        }
+
+        for key in rootfsMountPathLabelKeys {
+            if let labelPath = normalizedPath(labels[key]) {
+                return labelPath
+            }
+        }
+
+        return nil
+    }
+
+    private static func normalizedPath(_ path: String?) -> String? {
+        guard let path else { return nil }
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.hasPrefix("/") else { return nil }
+        return trimmed
+    }
 }
 
 /// Calculate total and unused image sizes
