@@ -1,3 +1,4 @@
+import ArcBoxClient
 import Foundation
 import SwiftTerm
 
@@ -56,6 +57,10 @@ class DockerTerminalSession {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: dockerPath)
         proc.arguments = ["exec", "-it", containerID, shell]
+        // Ensure docker CLI connects to the ArcBox daemon socket
+        var env = ProcessInfo.processInfo.environment
+        env["DOCKER_HOST"] = "unix://\(DaemonManager.dockerSocketPath)"
+        proc.environment = env
         proc.standardInput = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
         proc.standardOutput = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
         proc.standardError = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
@@ -173,7 +178,8 @@ class DockerTerminalSession {
             try proc.run()
             proc.waitUntilExit()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let path = String(data: data, encoding: .utf8)?.trimmingCharacters(
+                in: .whitespacesAndNewlines)
             if let path, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
                 return path
             }

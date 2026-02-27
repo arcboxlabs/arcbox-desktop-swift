@@ -128,7 +128,7 @@ struct ContainerFilesTab: View {
                 .padding(.horizontal, 20)
 
             if container.resolvedRootFSMountPath == nil {
-                Text("Set a rootfs mount path via labels or keep OrbStack running so ~/OrbStack paths are available.")
+                Text("Set a rootfs mount path via container labels.")
                     .font(.system(size: 12))
                     .foregroundStyle(AppColors.textMuted)
                     .multilineTextAlignment(.center)
