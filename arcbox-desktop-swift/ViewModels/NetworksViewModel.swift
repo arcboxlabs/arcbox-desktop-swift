@@ -1,14 +1,6 @@
 import SwiftUI
 import DockerClient
 
-/// Detail tab for networks
-enum NetworkDetailTab: String, CaseIterable, Identifiable {
-    case info = "Info"
-    case containers = "Containers"
-
-    var id: String { rawValue }
-}
-
 /// Sort field for networks
 enum NetworkSortField: String, CaseIterable {
     case name = "Name"
@@ -20,7 +12,6 @@ enum NetworkSortField: String, CaseIterable {
 class NetworksViewModel {
     var networks: [NetworkViewModel] = []
     var selectedID: String? = nil
-    var activeTab: NetworkDetailTab = .info
     var listWidth: CGFloat = 320
     var showNewNetworkSheet: Bool = false
     var sortBy: NetworkSortField = .name
