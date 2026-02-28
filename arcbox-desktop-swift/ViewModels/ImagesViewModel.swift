@@ -94,9 +94,6 @@ class ImagesViewModel {
         await loadImages(docker: docker)
     }
 
-    func loadSampleData() {
-        images = SampleData.images
-    }
 }
 
 // MARK: - Docker API → UI Model Conversion
