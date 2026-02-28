@@ -1,13 +1,24 @@
 import SwiftUI
 
-/// Containers tab showing containers connected to this network
-struct NetworkContainersTab: View {
+/// Inline section showing containers connected to this network
+struct NetworkContainersSection: View {
     let network: NetworkViewModel
 
     @State private var containers: [NetworkContainerEntry] = []
 
     var body: some View {
         VStack(spacing: 0) {
+            // Section header
+            HStack {
+                Text("Connected Containers")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
             // Column headers
             HStack(spacing: 0) {
                 Text("Name")
@@ -29,23 +40,19 @@ struct NetworkContainersTab: View {
             Divider()
 
             if containers.isEmpty {
-                Spacer()
                 Text("No containers connected")
                     .foregroundStyle(AppColors.textSecondary)
-                Spacer()
+                    .font(.system(size: 13))
+                    .padding(.vertical, 20)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(containers) { entry in
-                            NetworkContainerRow(entry: entry)
-                        }
+                LazyVStack(spacing: 0) {
+                    ForEach(containers) { entry in
+                        NetworkContainerRow(entry: entry)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppColors.background)
-        .onAppear {
+        .task(id: network.id) {
             loadSampleContainers()
         }
     }
