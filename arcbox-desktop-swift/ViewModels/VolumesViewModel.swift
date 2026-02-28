@@ -94,9 +94,6 @@ class VolumesViewModel {
         await loadVolumes(docker: docker)
     }
 
-    func loadSampleData() {
-        volumes = SampleData.volumes
-    }
 }
 
 // MARK: - Docker API → UI Model Conversion

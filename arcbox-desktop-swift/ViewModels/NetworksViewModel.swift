@@ -73,9 +73,6 @@ class NetworksViewModel {
         await loadNetworks(docker: docker)
     }
 
-    func loadSampleData() {
-        networks = SampleData.networks
-    }
 }
 
 // MARK: - Docker API → UI Model Conversion
@@ -102,7 +99,7 @@ extension NetworkViewModel {
             createdAt: createdAt,
             internal: network.Internal ?? false,
             attachable: network.Attachable ?? false,
-            containerCount: 0
+            containerCount: network.Containers?.additionalProperties.count ?? 0
         )
     }
 }

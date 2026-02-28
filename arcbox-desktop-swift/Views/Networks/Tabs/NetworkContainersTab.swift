@@ -1,8 +1,12 @@
 import SwiftUI
+import DockerClient
 
 /// Inline section showing containers connected to this network
 struct NetworkContainersSection: View {
     let network: NetworkViewModel
+
+    @Environment(\.dockerClient) private var docker
+    @Environment(ContainersViewModel.self) private var containersVM
 
     @State private var containers: [NetworkContainerEntry] = []
 
@@ -53,34 +57,36 @@ struct NetworkContainersSection: View {
             }
         }
         .task(id: network.id) {
-            loadSampleContainers()
+            await loadContainers()
         }
     }
 
-    private func loadSampleContainers() {
-        switch network.name {
-        case "bridge":
-            containers = [
-                NetworkContainerEntry(
-                    name: "web-frontend", isRunning: true,
-                    ipv4: "172.17.0.2/16", mac: "02:42:ac:11:00:02"),
-                NetworkContainerEntry(
-                    name: "redis-cache", isRunning: false,
-                    ipv4: "172.17.0.3/16", mac: "02:42:ac:11:00:03"),
-            ]
-        case "myapp_default":
-            containers = [
-                NetworkContainerEntry(
-                    name: "web-frontend", isRunning: true,
-                    ipv4: "192.168.215.2/24", mac: "02:42:c0:a8:d7:02"),
-                NetworkContainerEntry(
-                    name: "api-server", isRunning: true,
-                    ipv4: "192.168.215.3/24", mac: "02:42:c0:a8:d7:03"),
-                NetworkContainerEntry(
-                    name: "postgres-db", isRunning: true,
-                    ipv4: "192.168.215.4/24", mac: "02:42:c0:a8:d7:04"),
-            ]
-        default:
+    private func loadContainers() async {
+        guard let docker else {
+            containers = []
+            return
+        }
+
+        do {
+            let response = try await docker.api.NetworkInspect(path: .init(id: network.id))
+            let networkDetail = try response.ok.body.json
+            let networkContainers = networkDetail.Containers?.additionalProperties ?? [:]
+
+            containers = networkContainers.map { (containerID, entry) in
+                let isRunning = containersVM.containers.first {
+                    $0.id == containerID
+                }?.state == .running
+
+                return NetworkContainerEntry(
+                    name: entry.Name ?? containerID.prefix(12).description,
+                    isRunning: isRunning,
+                    ipv4: entry.IPv4Address ?? "",
+                    mac: entry.MacAddress ?? ""
+                )
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        } catch {
+            print("[NetworkContainers] Error loading containers for network \(network.id): \(error)")
             containers = []
         }
     }

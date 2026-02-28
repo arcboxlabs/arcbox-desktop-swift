@@ -36,5 +36,6 @@ struct NetworkDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColors.background)
+
     }
 }

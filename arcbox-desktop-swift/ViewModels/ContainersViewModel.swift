@@ -226,10 +226,10 @@ class ContainersViewModel {
 
     // MARK: - gRPC Operations
 
-    /// Load containers from daemon via gRPC, falling back to sample data.
+    /// Load containers from daemon via gRPC.
     func loadContainers(client: ArcBoxClient?) async {
         guard let client else {
-            loadSampleData()
+            print("[ContainersVM] No gRPC client available")
             return
         }
 
@@ -252,8 +252,7 @@ class ContainersViewModel {
                 await loadContainerDetails(selectedID, client: client)
             }
         } catch {
-            // Fallback to sample data on error
-            loadSampleData()
+            print("[ContainersVM] Error loading containers via gRPC: \(error)")
         }
     }
 
@@ -519,13 +518,6 @@ class ContainersViewModel {
         }
         NotificationCenter.default.post(name: .dockerDataChanged, object: nil)
         await loadContainersFromDocker(docker: docker)
-    }
-
-    /// Load sample data (fallback when daemon is not available)
-    func loadSampleData() {
-        containers = SampleData.containers
-        detailsByID = [:]
-        applyExpandedGroups(from: containers)
     }
 
     fileprivate static func normalized(_ value: String?) -> String? {

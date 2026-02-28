@@ -116,6 +116,7 @@ struct ContentView: View {
         case .networks:
             NetworkDetailView()
                 .environment(networksVM)
+                .environment(containersVM)
         case .pods:
             PodDetailView()
                 .environment(podsVM)
