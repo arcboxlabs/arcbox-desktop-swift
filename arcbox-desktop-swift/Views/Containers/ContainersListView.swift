@@ -5,6 +5,7 @@ import DockerClient
 /// Column 2: container list with toolbar
 struct ContainersListView: View {
     @Environment(ContainersViewModel.self) private var vm
+    @Environment(DaemonManager.self) private var daemonManager
     @Environment(\.arcboxClient) private var client
     @Environment(\.dockerClient) private var docker
 
@@ -32,7 +33,9 @@ struct ContainersListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if vm.containers.isEmpty {
+            if !daemonManager.state.isRunning {
+                DaemonLoadingView(state: daemonManager.state)
+            } else if vm.containers.isEmpty {
                 ContainerEmptyState()
             } else {
                 ScrollView {

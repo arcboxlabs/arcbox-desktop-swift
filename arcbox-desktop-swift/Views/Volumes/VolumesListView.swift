@@ -1,9 +1,11 @@
 import SwiftUI
+import ArcBoxClient
 import DockerClient
 
 /// Column 2: volumes list with toolbar
 struct VolumesListView: View {
     @Environment(VolumesViewModel.self) private var vm
+    @Environment(DaemonManager.self) private var daemonManager
     @Environment(\.dockerClient) private var docker
 
     var body: some View {
@@ -18,7 +20,9 @@ struct VolumesListView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            if vm.volumes.isEmpty {
+            if !daemonManager.state.isRunning {
+                DaemonLoadingView(state: daemonManager.state)
+            } else if vm.volumes.isEmpty {
                 VolumeEmptyState()
             } else {
                 ScrollView {

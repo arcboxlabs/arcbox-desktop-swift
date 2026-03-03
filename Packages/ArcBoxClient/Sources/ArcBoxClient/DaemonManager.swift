@@ -5,7 +5,8 @@ import ServiceManagement
 /// Daemon connection state derived from SMAppService registration + reachability.
 public enum DaemonState: Sendable, Equatable {
     case stopped        // Not registered with launchd
-    case transitioning  // Enable/disable in progress
+    case starting       // Enable in progress
+    case stopping       // Disable in progress
     case registered     // Registered but not yet reachable
     case running        // Registered and /_ping reachable
     case error(String)
@@ -64,7 +65,7 @@ public final class DaemonManager {
     /// Register the daemon with launchd and wait for it to become reachable.
     public func enableDaemon() async {
         errorMessage = nil
-        state = .transitioning
+        state = .starting
 
         // Ensure log directory exists (launchd fails if it can't create stdout/stderr paths)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -106,7 +107,7 @@ public final class DaemonManager {
     /// Unregister the daemon from launchd.
     public func disableDaemon() async {
         errorMessage = nil
-        state = .transitioning
+        state = .stopping
 
         do {
             try await service.unregister()

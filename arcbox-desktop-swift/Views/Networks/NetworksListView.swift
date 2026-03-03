@@ -1,9 +1,11 @@
 import SwiftUI
+import ArcBoxClient
 import DockerClient
 
 /// Column 2: networks list with toolbar
 struct NetworksListView: View {
     @Environment(NetworksViewModel.self) private var vm
+    @Environment(DaemonManager.self) private var daemonManager
     @Environment(\.dockerClient) private var docker
 
     var body: some View {
@@ -18,7 +20,9 @@ struct NetworksListView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            if vm.networks.isEmpty {
+            if !daemonManager.state.isRunning {
+                DaemonLoadingView(state: daemonManager.state)
+            } else if vm.networks.isEmpty {
                 NetworkEmptyState()
             } else {
                 ScrollView {

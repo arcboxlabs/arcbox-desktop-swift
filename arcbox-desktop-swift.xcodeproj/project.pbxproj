@@ -17,7 +17,7 @@
 		AB0D00042F60000000000001 /* Copy LaunchDaemon Plist */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "Contents/Library/LaunchAgents";
+			dstPath = Contents/Library/LaunchAgents;
 			dstSubfolderSpec = 1;
 			files = (
 				AB0D00022F60000000000001 /* io.arcbox.desktop.daemon.plist in Copy LaunchDaemon Plist */,
@@ -30,7 +30,7 @@
 /* Begin PBXFileReference section */
 		657F657B2F3A2ADB00C7005A /* ArcBox Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ArcBox Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		657F65A02F3A2ADB00C7005A /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
-		AB0D00012F60000000000001 /* io.arcbox.desktop.daemon.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "io.arcbox.desktop.daemon.plist"; sourceTree = "<group>"; };
+		AB0D00012F60000000000001 /* io.arcbox.desktop.daemon.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = io.arcbox.desktop.daemon.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -65,20 +65,20 @@
 			);
 			sourceTree = "<group>";
 		};
-		AB0D00062F60000000000001 /* LaunchDaemons */ = {
-			isa = PBXGroup;
-			children = (
-				AB0D00012F60000000000001 /* io.arcbox.desktop.daemon.plist */,
-			);
-			path = LaunchDaemons;
-			sourceTree = "<group>";
-		};
 		657F657C2F3A2ADB00C7005A /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				657F657B2F3A2ADB00C7005A /* ArcBox Desktop.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AB0D00062F60000000000001 /* LaunchDaemons */ = {
+			isa = PBXGroup;
+			children = (
+				AB0D00012F60000000000001 /* io.arcbox.desktop.daemon.plist */,
+			);
+			path = LaunchDaemons;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
