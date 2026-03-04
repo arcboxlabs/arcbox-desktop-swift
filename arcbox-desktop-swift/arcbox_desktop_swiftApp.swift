@@ -44,10 +44,9 @@ struct ArcBoxDesktopApp: App {
                     // via LaunchAgent, it will be detected automatically.
                     daemonManager.startMonitoring()
 
-                    // If not yet registered, enable the daemon via SMAppService.
-                    if !daemonManager.isReachable {
-                        await daemonManager.enableDaemon()
-                    }
+                    // Always register via SMAppService to ensure launchd management.
+                    // register() is idempotent and also polls for reachability.
+                    await daemonManager.enableDaemon()
 
                     // Initialize clients when daemon is running
                     if daemonManager.state.isRunning {
