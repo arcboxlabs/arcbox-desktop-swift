@@ -158,5 +158,6 @@ struct ImageTerminalTab: View {
     private func reconnect() {
         session.disconnect()
         session.state = .idle
+        connectToCurrentImage()
     }
 }

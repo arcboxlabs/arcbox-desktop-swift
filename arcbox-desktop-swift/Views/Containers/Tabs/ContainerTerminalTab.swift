@@ -13,6 +13,7 @@ struct ContainerTerminalTab: View {
 
     @State private var session = DockerTerminalSession()
     @State private var selectedShell = "/bin/sh"
+    @State private var terminalToken = UUID()
 
     private let availableShells = ["/bin/sh", "/bin/bash", "/bin/zsh"]
 
@@ -65,6 +66,7 @@ struct ContainerTerminalTab: View {
                     errorView(message)
                 default:
                     terminalContent
+                        .id(terminalToken)
                 }
             }
         }
@@ -215,6 +217,7 @@ struct ContainerTerminalTab: View {
     private func reconnect() {
         session.disconnect()
         session.state = .idle
+        terminalToken = UUID()
     }
 
     private func startContainer() {
