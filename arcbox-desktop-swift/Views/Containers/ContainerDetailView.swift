@@ -14,7 +14,7 @@ struct ContainerDetailView: View {
                 case .info:
                     ContainerInfoTab(container: container)
                         .id(
-                            "info-\(container.id)-\(container.domain ?? "")-\(container.ipAddress ?? "")-\(container.mounts.count)"
+                            "info-\(container.id)-\(container.domain ?? "")-\(container.ipAddress ?? "")-\(container.mounts.map(\.id).joined(separator: ","))"
                         )
                 case .logs:
                     ContainerLogsTab(container: container)
