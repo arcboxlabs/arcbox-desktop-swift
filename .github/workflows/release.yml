@@ -36,7 +36,7 @@ jobs:
       - name: Checkout arcbox
         uses: actions/checkout@v4
         with:
-          repository: arcboxd/arcbox
+          repository: arcboxlabs/arcbox
           path: arcbox
           ref: ${{ inputs.arcbox_ref || 'master' }}
 
@@ -147,7 +147,7 @@ jobs:
           BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          arcbox/scripts/package-dmg.sh \
+          scripts/package-dmg.sh \
             --sign "${{ secrets.APPLE_SIGNING_IDENTITY }}" \
             --notarize
           DMG_PATH=$(ls arcbox/target/ArcBox-*.dmg | head -1)
