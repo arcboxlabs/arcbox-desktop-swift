@@ -69,8 +69,9 @@ struct ArcBoxDesktopApp: App {
                         }
                     }
 
-                    // 5. Background: check for boot-asset updates after a delay
-                    Task.detached {
+                    // 5. Background: check for boot-asset updates after a delay.
+                    // Uses child Task (not .detached) so it's cancelled when .task tears down.
+                    Task {
                         try? await Task.sleep(for: .seconds(5))
                         await bootAssetManager.checkForUpdates()
                     }

@@ -31,14 +31,14 @@ public final class DaemonManager {
     public private(set) var errorMessage: String?
 
     /// Path to the Docker-compatible socket used for health checks and DockerClient.
-    public nonisolated(unsafe) static let dockerSocketPath: String = {
+    public nonisolated static let dockerSocketPath: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.arcbox/docker.sock"
     }()
 
-    private static let plistName = "io.arcbox.desktop.daemon.plist"
+    private nonisolated static let plistName = "io.arcbox.desktop.daemon.plist"
 
-    private var service: SMAppService {
+    private nonisolated var service: SMAppService {
         SMAppService.agent(plistName: Self.plistName)
     }
 

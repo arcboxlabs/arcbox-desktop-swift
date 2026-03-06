@@ -43,21 +43,24 @@ public final class BootAssetManager {
     ///
     /// Reads the bundled `boot-assets.lock` to determine the version, then copies
     /// assets from `Contents/Resources/boot/{version}/` to `~/.arcbox/boot/{version}/`
-    /// if they're missing.
+    /// if they're missing. All file I/O runs off the main actor.
     public func ensureAssets() async {
         guard let version = Self.readBundledVersion() else {
             // No bundled lock file — running in dev mode or assets not embedded yet.
-            state = .error("boot-assets.lock not found in app bundle")
+            // Leave state as .unknown so the UI doesn't show an error.
             return
         }
         currentVersion = version
 
-        let fm = FileManager.default
         let cacheDir = "\(Self.cacheBaseDir)/\(version)"
         let manifestPath = "\(cacheDir)/manifest.json"
 
-        // Already seeded?
-        if fm.fileExists(atPath: manifestPath) {
+        // Already seeded? (check off-main)
+        let alreadySeeded = await Task.detached {
+            FileManager.default.fileExists(atPath: manifestPath)
+        }.value
+
+        if alreadySeeded {
             state = .ready(version: version)
             return
         }
@@ -72,21 +75,31 @@ public final class BootAssetManager {
 
         state = .seeding(version: version)
 
-        do {
-            try fm.createDirectory(atPath: cacheDir, withIntermediateDirectories: true)
+        // Perform file copies off the main actor
+        let result: Result<Void, Error> = await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            do {
+                try fm.createDirectory(atPath: cacheDir, withIntermediateDirectories: true)
 
-            let items = try fm.contentsOfDirectory(atPath: bundleBootDir)
-            for item in items {
-                let src = "\(bundleBootDir)/\(item)"
-                let dst = "\(cacheDir)/\(item)"
-                if fm.fileExists(atPath: dst) {
-                    try fm.removeItem(atPath: dst)
+                let items = try fm.contentsOfDirectory(atPath: bundleBootDir)
+                for item in items {
+                    let src = "\(bundleBootDir)/\(item)"
+                    let dst = "\(cacheDir)/\(item)"
+                    if fm.fileExists(atPath: dst) {
+                        try fm.removeItem(atPath: dst)
+                    }
+                    try fm.copyItem(atPath: src, toPath: dst)
                 }
-                try fm.copyItem(atPath: src, toPath: dst)
+                return .success(())
+            } catch {
+                return .failure(error)
             }
+        }.value
 
+        switch result {
+        case .success:
             state = .ready(version: version)
-        } catch {
+        case .failure(let error):
             state = .error("Failed to seed boot-assets: \(error.localizedDescription)")
         }
     }
@@ -99,9 +112,9 @@ public final class BootAssetManager {
 
         state = .checking
 
-        // Try via bundled CLI first
+        // Try via bundled CLI first (runs off-main)
         if let cliPath = Self.findCLI() {
-            let newVersion = await checkUpdateViaCLI(cliPath: cliPath)
+            let newVersion = await Self.checkUpdateViaCLI(cliPath: cliPath)
             if let newVersion, newVersion != current {
                 state = .updateAvailable(current: current, new: newVersion)
                 return
@@ -109,7 +122,7 @@ public final class BootAssetManager {
         }
 
         // Fallback: direct HTTP check against CDN
-        if let newVersion = await checkUpdateViaCDN() {
+        if let newVersion = await Self.checkUpdateViaCDN() {
             if newVersion != current {
                 state = .updateAvailable(current: current, new: newVersion)
                 return
@@ -122,6 +135,7 @@ public final class BootAssetManager {
     // MARK: - Download Update
 
     /// Download a specific boot-asset version. Call after user confirms the update.
+    /// All process execution runs off the main actor; only state updates touch MainActor.
     public func downloadUpdate(version: String) async {
         state = .downloading(version: version, progress: 0.0)
 
@@ -130,47 +144,52 @@ public final class BootAssetManager {
             return
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: cliPath)
-        process.arguments = ["boot", "prefetch", "--asset-version", version]
+        // Run the entire download process off-main. Progress updates are sent
+        // back to MainActor via a callback closure.
+        let exitCode: Int32 = await withCheckedContinuation { continuation in
+            Task.detached { [weak self] in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: cliPath)
+                process.arguments = ["boot", "prefetch", "--asset-version", version]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-        } catch {
-            state = .error("Failed to start download: \(error.localizedDescription)")
-            return
-        }
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(returning: Int32(-1))
+                    return
+                }
 
-        // Monitor progress from stdout (best-effort parsing)
-        let handle = pipe.fileHandleForReading
-        let manager = self
-        Task.detached {
-            while true {
-                let data = handle.availableData
-                if data.isEmpty { break }
-                if let line = String(data: data, encoding: .utf8) {
-                    if let pct = BootAssetManager.parseProgress(line) {
-                        await MainActor.run {
-                            manager.state = .downloading(
-                                version: version, progress: pct)
-                        }
+                // Read progress from stdout synchronously (we're off-main)
+                let handle = pipe.fileHandleForReading
+                while true {
+                    let data = handle.availableData
+                    if data.isEmpty { break }
+                    if let line = String(data: data, encoding: .utf8),
+                       let pct = BootAssetManager.parseProgress(line) {
+                        await self?.updateProgress(version: version, progress: pct)
                     }
                 }
+
+                process.waitUntilExit()
+                continuation.resume(returning: process.terminationStatus)
             }
         }
 
-        process.waitUntilExit()
-
-        if process.terminationStatus == 0 {
+        if exitCode == 0 {
             currentVersion = version
             state = .ready(version: version)
         } else {
-            state = .error("Download failed (exit code \(process.terminationStatus))")
+            state = .error("Download failed (exit code \(exitCode))")
         }
+    }
+
+    /// Helper to update download progress from off-main context.
+    private func updateProgress(version: String, progress: Double) {
+        state = .downloading(version: version, progress: progress)
     }
 
     // MARK: - Helpers
@@ -244,7 +263,7 @@ public final class BootAssetManager {
             }
         }
 
-        // 3. PATH lookup
+        // 3. PATH lookup (synchronous but lightweight; only called from nonisolated context)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = ["arcbox"]
@@ -267,38 +286,40 @@ public final class BootAssetManager {
         return nil
     }
 
-    /// Use the CLI to check for boot-asset updates.
-    private func checkUpdateViaCLI(cliPath: String) async -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: cliPath)
-        process.arguments = ["boot", "status"]
+    /// Use the CLI to check for boot-asset updates. Runs entirely off-main.
+    private nonisolated static func checkUpdateViaCLI(cliPath: String) async -> String? {
+        await Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: cliPath)
+            process.arguments = ["boot", "status"]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-            process.waitUntilExit()
+            do {
+                try process.run()
+                process.waitUntilExit()
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                for line in output.components(separatedBy: .newlines) {
-                    if line.lowercased().contains("latest") {
-                        let parts = line.components(separatedBy: ":")
-                        if parts.count >= 2 {
-                            return parts[1].trimmingCharacters(in: .whitespaces)
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    for line in output.components(separatedBy: .newlines) {
+                        if line.lowercased().contains("latest") {
+                            let parts = line.components(separatedBy: ":")
+                            if parts.count >= 2 {
+                                return parts[1].trimmingCharacters(in: .whitespaces)
+                            }
                         }
                     }
                 }
-            }
-        } catch {}
+            } catch {}
 
-        return nil
+            return nil
+        }.value
     }
 
     /// Direct HTTP check against CDN for latest version.
-    private func checkUpdateViaCDN() async -> String? {
+    private nonisolated static func checkUpdateViaCDN() async -> String? {
         #if arch(arm64)
         let arch = "aarch64"
         #else
@@ -323,6 +344,7 @@ public final class BootAssetManager {
     }
 
     /// Prefetch boot-assets via the CLI (when no bundled assets are available).
+    /// Process execution runs off-main.
     private func prefetchViaCLI(version: String) async {
         guard let cliPath = Self.findCLI() else {
             state = .error("arcbox CLI not found — cannot prefetch boot-assets")
@@ -331,24 +353,27 @@ public final class BootAssetManager {
 
         state = .downloading(version: version, progress: 0.0)
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: cliPath)
-        process.arguments = ["boot", "prefetch", "--asset-version", version]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let exitCode: Int32 = await Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: cliPath)
+            process.arguments = ["boot", "prefetch", "--asset-version", version]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
-                state = .ready(version: version)
-            } else {
-                state = .error(
-                    "Boot-asset prefetch failed (exit \(process.terminationStatus))")
+            do {
+                try process.run()
+                process.waitUntilExit()
+                return process.terminationStatus
+            } catch {
+                return Int32(-1)
             }
-        } catch {
+        }.value
+
+        if exitCode == 0 {
+            state = .ready(version: version)
+        } else {
             state = .error(
-                "Failed to run prefetch: \(error.localizedDescription)")
+                "Boot-asset prefetch failed (exit \(exitCode))")
         }
     }
 
