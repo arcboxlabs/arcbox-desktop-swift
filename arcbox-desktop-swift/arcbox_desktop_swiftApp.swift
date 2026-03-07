@@ -50,6 +50,10 @@ struct ArcBoxDesktopApp: App {
                     // Failures are non-fatal — users can run `arcbox setup install` manually.
                     if let cli = try? CLIRunner() {
                         try? await cli.run(arguments: ["setup", "install"])
+                        // Install Docker CLI tools from app bundle xbin/ → ~/.arcbox/bin/
+                        try? await cli.run(arguments: ["docker", "setup"])
+                        // Set "arcbox" as the default Docker context.
+                        try? await cli.run(arguments: ["docker", "enable"])
                     }
 
                     // 2. Start health monitoring; if daemon is already registered
