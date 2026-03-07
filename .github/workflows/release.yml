@@ -188,6 +188,14 @@ jobs:
           codesign --force -s - target/release/abctl
           target/release/abctl boot prefetch
 
+      - name: Download Docker CLI tools
+        working-directory: arcbox
+        run: target/release/abctl docker setup
+
+      - name: Build pstramp
+        working-directory: arcbox
+        run: make -C tools/pstramp
+
       - name: Symlink arcbox repo for Xcode build phase
         run: ln -s "$GITHUB_WORKSPACE/arcbox" ../arcbox
 

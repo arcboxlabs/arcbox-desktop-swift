@@ -100,13 +100,13 @@ echo "  App bundle: $APP_BUNDLE"
 # ---------------------------------------------------------------------------
 echo "--- Embedding boot-assets ---"
 
-# Read version from boot-assets.lock.
-LOCK_FILE="$ARCBOX_DIR/boot-assets.lock"
+# Read boot version from assets.lock.
+LOCK_FILE="$ARCBOX_DIR/assets.lock"
 if [ ! -f "$LOCK_FILE" ]; then
     echo "error: $LOCK_FILE not found" >&2
     exit 1
 fi
-BOOT_VERSION=$(grep '^version' "$LOCK_FILE" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+BOOT_VERSION=$(awk '/^\[boot\]/,0' "$LOCK_FILE" | grep '^version' | head -1 | sed 's/.*= *"\(.*\)"/\1/')
 echo "  Boot-asset version: $BOOT_VERSION"
 
 # Locate cached boot-assets (after `abctl boot prefetch`).
@@ -126,8 +126,8 @@ if [ -z "$BOOT_CACHE" ]; then
     exit 1
 fi
 
-# Copy boot-assets.lock → Contents/Resources/ (fallback path uses it).
-cp "$LOCK_FILE" "$APP_BUNDLE/Contents/Resources/boot-assets.lock"
+# Copy assets.lock → Contents/Resources/ (fallback path uses it).
+cp "$LOCK_FILE" "$APP_BUNDLE/Contents/Resources/assets.lock"
 
 # Copy boot files → Contents/Resources/boot/{version}/ (matches BootAssetManager.bundledBootDir).
 BOOT_DEST="$APP_BUNDLE/Contents/Resources/boot/$BOOT_VERSION"
@@ -154,7 +154,79 @@ if [ -f "$CLI_BIN" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Re-sign the entire app bundle
+# 4. Embed Docker CLI tools
+# ---------------------------------------------------------------------------
+echo "--- Embedding Docker CLI tools ---"
+
+DOCKER_TOOLS_SRC="$HOME/.arcbox/runtime/bin"
+DOCKER_DEST="$APP_BUNDLE/Contents/Helpers/docker"
+DOCKER_TOOLS=(docker docker-buildx docker-compose docker-credential-osxkeychain)
+DOCKER_EMBEDDED=0
+
+mkdir -p "$DOCKER_DEST"
+for tool in "${DOCKER_TOOLS[@]}"; do
+    if [ -f "$DOCKER_TOOLS_SRC/$tool" ]; then
+        cp -f "$DOCKER_TOOLS_SRC/$tool" "$DOCKER_DEST/$tool"
+        if [ -n "$SIGN_IDENTITY" ]; then
+            codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+                --timestamp "$DOCKER_DEST/$tool"
+        fi
+        echo "  Embedded $tool"
+        DOCKER_EMBEDDED=$((DOCKER_EMBEDDED + 1))
+    fi
+done
+
+if [ "$DOCKER_EMBEDDED" -eq 0 ]; then
+    echo "  Warning: no Docker tools found at $DOCKER_TOOLS_SRC"
+    echo "  Run 'abctl docker setup' to download them first."
+    rmdir "$DOCKER_DEST" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Embed Docker shell completions
+# ---------------------------------------------------------------------------
+echo "--- Embedding Docker completions ---"
+
+COMP_SRC="$HOME/.arcbox/completions"
+COMP_DEST="$APP_BUNDLE/Contents/Resources/completions"
+
+for shell_dir in zsh bash fish; do
+    src_dir="$COMP_SRC/$shell_dir"
+    if [ -d "$src_dir" ] && [ "$(ls -A "$src_dir" 2>/dev/null)" ]; then
+        mkdir -p "$COMP_DEST/$shell_dir"
+        cp -f "$src_dir"/* "$COMP_DEST/$shell_dir/"
+        echo "  Copied $shell_dir completions"
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# 6. Embed pstramp
+# ---------------------------------------------------------------------------
+echo "--- Embedding pstramp ---"
+
+PSTRAMP_SRC=""
+for candidate in \
+    "$ARCBOX_DIR/tools/pstramp/pstramp" \
+    "$ARCBOX_DIR/target/release/pstramp"; do
+    if [ -f "$candidate" ]; then
+        PSTRAMP_SRC="$candidate"
+        break
+    fi
+done
+
+if [ -n "$PSTRAMP_SRC" ]; then
+    cp -f "$PSTRAMP_SRC" "$APP_BUNDLE/Contents/MacOS/pstramp"
+    if [ -n "$SIGN_IDENTITY" ]; then
+        codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+            --timestamp "$APP_BUNDLE/Contents/MacOS/pstramp"
+    fi
+    echo "  Embedded pstramp from $PSTRAMP_SRC"
+else
+    echo "  Warning: pstramp not found. Build it with: make -C tools/pstramp"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Re-sign the entire app bundle
 # ---------------------------------------------------------------------------
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "--- Signing app bundle ---"
@@ -166,7 +238,7 @@ if [ -n "$SIGN_IDENTITY" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Create DMG
+# 8. Create DMG
 # ---------------------------------------------------------------------------
 echo "--- Creating DMG ---"
 rm -f "$DMG_PATH"
@@ -190,7 +262,7 @@ if [ ! -f "$DMG_PATH" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Sign DMG
+# 9. Sign DMG
 # ---------------------------------------------------------------------------
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "--- Signing DMG ---"
@@ -198,7 +270,7 @@ if [ -n "$SIGN_IDENTITY" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Notarize
+# 10. Notarize
 # ---------------------------------------------------------------------------
 if [ "$NOTARIZE" = true ] && [ -n "$SIGN_IDENTITY" ]; then
     echo "--- Notarizing DMG ---"
