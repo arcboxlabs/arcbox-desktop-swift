@@ -9,6 +9,7 @@
 #   BUNDLE_ID      - App bundle identifier (default: com.arcbox.arcbox-desktop-swift)
 #   TEAM_ID        - Apple Developer Team ID (required for signing)
 #   ARCBOX_DIR     - Path to arcbox checkout (default: DESKTOP_REPO/../arcbox or ./arcbox)
+#   PSTRAMP_DIR    - Path to pstramp checkout (default: ARCBOX_DIR/../pstramp)
 
 set -euo pipefail
 
@@ -205,9 +206,10 @@ done
 echo "--- Embedding pstramp ---"
 
 PSTRAMP_SRC=""
+PSTRAMP_DIR="${PSTRAMP_DIR:-""}"
 for candidate in \
-    "$ARCBOX_DIR/tools/pstramp/pstramp" \
-    "$ARCBOX_DIR/target/release/pstramp"; do
+    "$PSTRAMP_DIR/target/release/pstramp" \
+    "$ARCBOX_DIR/../pstramp/target/release/pstramp"; do
     if [ -f "$candidate" ]; then
         PSTRAMP_SRC="$candidate"
         break
@@ -222,7 +224,7 @@ if [ -n "$PSTRAMP_SRC" ]; then
     fi
     echo "  Embedded pstramp from $PSTRAMP_SRC"
 else
-    echo "  Warning: pstramp not found. Build it with: make -C tools/pstramp"
+    echo "  Warning: pstramp not found. Build it with: cargo build --release -p pstramp"
 fi
 
 # ---------------------------------------------------------------------------

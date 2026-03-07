@@ -192,9 +192,15 @@ jobs:
         working-directory: arcbox
         run: target/release/abctl docker setup
 
+      - name: Checkout pstramp
+        uses: actions/checkout@v4
+        with:
+          repository: arcboxlabs/pstramp
+          path: pstramp
+
       - name: Build pstramp
-        working-directory: arcbox
-        run: make -C tools/pstramp
+        working-directory: pstramp
+        run: cargo build --release
 
       - name: Symlink arcbox repo for Xcode build phase
         run: ln -s "$GITHUB_WORKSPACE/arcbox" ../arcbox
