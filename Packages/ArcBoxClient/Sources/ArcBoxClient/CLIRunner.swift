@@ -111,6 +111,19 @@ public struct CLIRunner: Sendable {
         }
     }
 
+    /// Run a CLI command ignoring stdout. Returns the exit code.
+    ///
+    /// Use this for fire-and-forget operations like `setup install` where we
+    /// don't need to parse the output.
+    @discardableResult
+    public func run(arguments: [String]) async throws -> Int32 {
+        let (_, exitCode) = try await run(arguments: arguments)
+        guard exitCode == 0 else {
+            throw CLIRunnerError.nonZeroExit(exitCode, stderr: nil)
+        }
+        return exitCode
+    }
+
     // MARK: - Private
 
     /// Run a process and capture stdout as a string.
