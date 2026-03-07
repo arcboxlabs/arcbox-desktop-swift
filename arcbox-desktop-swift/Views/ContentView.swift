@@ -45,15 +45,15 @@ struct ContentView: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 150, ideal: 180, max: 220)
+            .navigationSplitViewColumnWidth(180)
         } content: {
             // Sandbox section: collapse content column, full view goes to detail
             if isSandboxSection {
                 Color.clear
-                    .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
+                    .navigationSplitViewColumnWidth(0)
             } else {
                 contentColumn
-                    .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 500)
+                    .navigationSplitViewColumnWidth(280)
             }
         } detail: {
             detailColumn
